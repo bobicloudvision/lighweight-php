@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { apiService } from '../services/api'
+import { apiService, type Provider } from '../services/api'
 
 interface PhpVersion {
   version: string
@@ -75,6 +75,8 @@ const getVersionMetadata = (version: string): Omit<PhpVersion, 'version' | 'stat
 export default function Marketplace() {
   const [availableVersions, setAvailableVersions] = useState<string[]>([])
   const [installedVersions, setInstalledVersions] = useState<string[]>([])
+  const [providers, setProviders] = useState<Provider[]>([])
+  const [selectedProvider, setSelectedProvider] = useState<string>('remi')
   const [loading, setLoading] = useState(true)
   const [installing, setInstalling] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -85,15 +87,39 @@ export default function Marketplace() {
     loadData()
   }, [])
 
+  const handleProviderChange = (providerType: string) => {
+    setSelectedProvider(providerType)
+    if (providerType === 'remi') {
+      loadData()
+    } else {
+      loadProviderVersions(providerType)
+    }
+  }
+
   const loadData = async () => {
     setLoading(true)
     setError(null)
     
-    // Load both available and installed versions in parallel
-    const [availableResult, installedResult] = await Promise.all([
+    // Load providers, available versions, and installed versions in parallel
+    const [providersResult, availableResult, installedResult] = await Promise.all([
+      apiService.getProviders(),
       apiService.getAvailablePhpVersions(),
       apiService.getPhpVersions(),
     ])
+
+    if (providersResult.data && providersResult.data.providers) {
+      const providersList = Array.isArray(providersResult.data.providers) ? providersResult.data.providers : []
+      setProviders(providersList)
+      // Set default provider to 'remi' if available and not already set
+      if (providersList.length > 0 && !selectedProvider) {
+        const remiProvider = providersList.find(p => p.type === 'remi')
+        if (remiProvider) {
+          setSelectedProvider('remi')
+        } else {
+          setSelectedProvider(providersList[0].type)
+        }
+      }
+    }
 
     if (availableResult.data && availableResult.data.versions) {
       setAvailableVersions(Array.isArray(availableResult.data.versions) ? availableResult.data.versions : [])
@@ -111,16 +137,48 @@ export default function Marketplace() {
     setLoading(false)
   }
 
+  const loadProviderVersions = async (provider?: string) => {
+    const providerToUse = provider || selectedProvider
+    setLoading(true)
+    setError(null)
+
+    const [availableResult, installedResult] = await Promise.all([
+      apiService.getProviderAvailableVersions(providerToUse),
+      apiService.getProviderVersions(providerToUse),
+    ])
+
+    if (availableResult.data && availableResult.data.versions) {
+      setAvailableVersions(Array.isArray(availableResult.data.versions) ? availableResult.data.versions : [])
+    } else {
+      setError(availableResult.error || `Failed to load available versions for ${selectedProvider}`)
+      setAvailableVersions([])
+    }
+
+    if (installedResult.data && installedResult.data.versions) {
+      setInstalledVersions(Array.isArray(installedResult.data.versions) ? installedResult.data.versions : [])
+    } else {
+      setInstalledVersions([])
+    }
+
+    setLoading(false)
+  }
+
   const handleInstall = async (version: string) => {
     setInstalling(version)
     setError(null)
     setSuccess(null)
 
-    const result = await apiService.installPhpVersion(version)
+    const result = selectedProvider === 'remi'
+      ? await apiService.installPhpVersion(version, selectedProvider)
+      : await apiService.installPhpVersionWithProvider(selectedProvider, version)
     
     if (result.data) {
-      setSuccess(`PHP ${version} installed successfully!`)
-      await loadData()
+      setSuccess(`PHP ${version} installed successfully using ${selectedProvider}!`)
+      if (selectedProvider === 'remi') {
+        await loadData()
+      } else {
+        await loadProviderVersions()
+      }
     } else {
       setError(result.error || `Failed to install PHP ${version}`)
     }
@@ -205,7 +263,7 @@ export default function Marketplace() {
           <p className="text-gray-600">Browse and install available PHP versions from repository</p>
         </div>
         <button
-          onClick={loadData}
+          onClick={() => selectedProvider === 'remi' ? loadData() : loadProviderVersions()}
           disabled={loading}
           className="px-4 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 disabled:bg-gray-50 disabled:text-gray-400 transition-colors flex items-center gap-2"
         >
@@ -215,6 +273,34 @@ export default function Marketplace() {
           Refresh
         </button>
       </div>
+
+      {/* Provider Selection */}
+      {providers.length > 0 && (
+        <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
+          <label htmlFor="provider-select" className="block text-sm font-medium text-gray-700 mb-3">
+            PHP Provider
+          </label>
+          <div className="flex gap-4 items-center">
+            <select
+              id="provider-select"
+              value={selectedProvider}
+              onChange={(e) => handleProviderChange(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+            >
+              {providers.map((provider) => (
+                <option key={provider.type} value={provider.type}>
+                  {provider.name} {provider.status === 'stub' && '(Stub)'}
+                </option>
+              ))}
+            </select>
+            {providers.find(p => p.type === selectedProvider) && (
+              <p className="text-sm text-gray-600">
+                {providers.find(p => p.type === selectedProvider)?.description}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Filter Tabs */}
       <div className="bg-white rounded-lg shadow-md p-4 border border-gray-200">
@@ -394,8 +480,10 @@ export default function Marketplace() {
           </div>
           <div className="ml-3">
             <p className="text-sm text-blue-700">
-              <strong>Note:</strong> Available versions are fetched from your system's repository (Remi for RHEL, ondrej PPA for Debian). 
-              Installation may take a few minutes depending on your system.
+              <strong>Note:</strong> Available versions are fetched from your system's repository based on the selected provider. 
+              The default provider is "remi" (Remi repository for RHEL, ondrej PPA for Debian). 
+              Other providers (lsphp, alt-php, docker) may have different available versions. 
+              Installation may take a few minutes depending on your system and provider.
             </p>
           </div>
         </div>

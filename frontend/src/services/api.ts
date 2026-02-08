@@ -11,6 +11,13 @@ export interface Pool {
   SocketPath: string
 }
 
+export interface Provider {
+  type: string
+  name: string
+  description: string
+  status: string
+}
+
 export interface ApiResponse<T> {
   data?: T
   error?: string
@@ -50,11 +57,33 @@ class ApiService {
     return this.request<{ status: string }>('/health')
   }
 
-  async installPhpVersion(version: string): Promise<ApiResponse<{ message: string; version: string }>> {
-    return this.request<{ message: string; version: string }>(
-      `/api/v1/php/install/${version}`,
+  async installPhpVersion(version: string, provider?: string): Promise<ApiResponse<{ message: string; version: string; provider?: string }>> {
+    const url = provider 
+      ? `/api/v1/php/install/${version}?provider=${provider}`
+      : `/api/v1/php/install/${version}`
+    return this.request<{ message: string; version: string; provider?: string }>(
+      url,
       { method: 'POST' }
     )
+  }
+
+  async getProviders(): Promise<ApiResponse<{ providers: Provider[] }>> {
+    return this.request<{ providers: Provider[] }>('/api/v1/providers')
+  }
+
+  async installPhpVersionWithProvider(provider: string, version: string): Promise<ApiResponse<{ message: string; version: string; provider: string }>> {
+    return this.request<{ message: string; version: string; provider: string }>(
+      `/api/v1/providers/${provider}/install/${version}`,
+      { method: 'POST' }
+    )
+  }
+
+  async getProviderVersions(provider: string): Promise<ApiResponse<{ provider: string; versions: string[] }>> {
+    return this.request<{ provider: string; versions: string[] }>(`/api/v1/providers/${provider}/versions`)
+  }
+
+  async getProviderAvailableVersions(provider: string): Promise<ApiResponse<{ provider: string; versions: string[] }>> {
+    return this.request<{ provider: string; versions: string[] }>(`/api/v1/providers/${provider}/available`)
   }
 
   async getPhpVersions(): Promise<ApiResponse<{ versions: string[] }>> {

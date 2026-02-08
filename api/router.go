@@ -6,6 +6,7 @@ import (
 	"net/http"
 
 	"lightweight-php/manager"
+	"lightweight-php/provider"
 
 	"github.com/gorilla/mux"
 )
@@ -47,6 +48,12 @@ func (r *Router) setupRoutes() {
 	r.HandleFunc("/api/v1/php/install/{version}", r.installPHP).Methods("POST")
 	r.HandleFunc("/api/v1/php/versions", r.listPHPVersions).Methods("GET")
 	r.HandleFunc("/api/v1/php/available", r.listAvailablePHP).Methods("GET")
+	
+	// Provider endpoints
+	r.HandleFunc("/api/v1/providers", r.listProviders).Methods("GET")
+	r.HandleFunc("/api/v1/providers/{provider}/install/{version}", r.installPHPWithProvider).Methods("POST")
+	r.HandleFunc("/api/v1/providers/{provider}/versions", r.listPHPVersionsByProvider).Methods("GET")
+	r.HandleFunc("/api/v1/providers/{provider}/available", r.listAvailablePHPByProvider).Methods("GET")
 
 	// Health check
 	r.HandleFunc("/health", r.healthCheck).Methods("GET")
@@ -134,15 +141,34 @@ func (r *Router) deletePool(w http.ResponseWriter, req *http.Request) {
 func (r *Router) installPHP(w http.ResponseWriter, req *http.Request) {
 	vars := mux.Vars(req)
 	version := vars["version"]
+	
+	// Check for provider parameter in query string
+	providerParam := req.URL.Query().Get("provider")
+	
+	var err error
+	if providerParam != "" {
+		// Use specific provider
+		providerType := provider.ProviderType(providerParam)
+		err = r.packageManager.InstallPHPWithProvider(version, providerType)
+	} else {
+		// Use default provider
+		err = r.packageManager.InstallPHP(version)
+	}
 
-	if err := r.packageManager.InstallPHP(version); err != nil {
+	if err != nil {
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
 
-	jsonResponse(w, http.StatusOK, map[string]string{
-		"message": "PHP installed successfully",
-		"version": version,
+	providerUsed := providerParam
+	if providerUsed == "" {
+		providerUsed = "remi" // default
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"message":  "PHP installed successfully",
+		"version":  version,
+		"provider": providerUsed,
 	})
 }
 
@@ -168,6 +194,106 @@ func (r *Router) listAvailablePHP(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"versions": versions,
+	})
+}
+
+func (r *Router) listProviders(w http.ResponseWriter, req *http.Request) {
+	providers := []map[string]string{
+		{
+			"type":        "remi",
+			"name":        "Remi Repository",
+			"description": "Remi repository for RHEL, ondrej PPA for Debian",
+			"status":      "active",
+		},
+		{
+			"type":        "lsphp",
+			"name":        "LiteSpeed PHP",
+			"description": "LiteSpeed Web Server PHP",
+			"status":      "stub",
+		},
+		{
+			"type":        "alt-php",
+			"name":        "Alternative PHP",
+			"description": "Alternative PHP packages",
+			"status":      "stub",
+		},
+		{
+			"type":        "docker",
+			"name":        "Docker PHP",
+			"description": "Docker-hosted PHP containers",
+			"status":      "stub",
+		},
+	}
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"providers": providers,
+	})
+}
+
+func (r *Router) installPHPWithProvider(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	version := vars["version"]
+	providerTypeStr := vars["provider"]
+	
+	providerType := provider.ProviderType(providerTypeStr)
+	if err := r.packageManager.InstallPHPWithProvider(version, providerType); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"message":  "PHP installed successfully",
+		"version":  version,
+		"provider": providerTypeStr,
+	})
+}
+
+func (r *Router) listPHPVersionsByProvider(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	providerTypeStr := vars["provider"]
+	
+	providerType := provider.ProviderType(providerTypeStr)
+	phpProvider, err := r.packageManager.GetProviderByType(providerType)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, fmt.Sprintf("Invalid provider: %s", providerTypeStr))
+		return
+	}
+
+	versions, err := phpProvider.ListInstalledPHP()
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	
+	if versions == nil {
+		versions = []string{}
+	}
+	
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"provider": providerTypeStr,
+		"versions": versions,
+	})
+}
+
+func (r *Router) listAvailablePHPByProvider(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	providerTypeStr := vars["provider"]
+	
+	providerType := provider.ProviderType(providerTypeStr)
+	phpProvider, err := r.packageManager.GetProviderByType(providerType)
+	if err != nil {
+		jsonError(w, http.StatusBadRequest, fmt.Sprintf("Invalid provider: %s", providerTypeStr))
+		return
+	}
+
+	versions, err := phpProvider.ListAvailablePHP()
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"provider": providerTypeStr,
 		"versions": versions,
 	})
 }

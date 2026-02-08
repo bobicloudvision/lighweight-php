@@ -45,18 +45,26 @@ Install a PHP version from Remi repository (RHEL) or ondrej PPA (Debian).
 
 **Parameters:**
 - `version` (path parameter) - PHP version to install (e.g., `8.2`, `8.1`, `8.3`)
+- `provider` (query parameter, optional) - PHP provider type: `remi`, `lsphp`, `alt-php`, or `docker` (default: `remi`)
 
 **Response:**
 ```json
 {
   "message": "PHP installed successfully",
-  "version": "8.2"
+  "version": "8.2",
+  "provider": "remi"
 }
 ```
 
-**Example:**
+**Examples:**
 ```bash
+# Install with default provider (remi)
 curl -X POST http://localhost:8080/api/v1/php/install/8.2
+
+# Install with specific provider
+curl -X POST http://localhost:8080/api/v1/php/install/8.2?provider=lsphp
+curl -X POST http://localhost:8080/api/v1/php/install/8.2?provider=alt-php
+curl -X POST http://localhost:8080/api/v1/php/install/8.2?provider=docker
 ```
 
 **Error Response (500):**
@@ -307,6 +315,142 @@ curl -X DELETE http://localhost:8080/api/v1/pools/john
 
 ---
 
+### Provider Management
+
+#### GET /api/v1/providers
+
+List all available PHP providers.
+
+**Response:**
+```json
+{
+  "providers": [
+    {
+      "type": "remi",
+      "name": "Remi Repository",
+      "description": "Remi repository for RHEL, ondrej PPA for Debian",
+      "status": "active"
+    },
+    {
+      "type": "lsphp",
+      "name": "LiteSpeed PHP",
+      "description": "LiteSpeed Web Server PHP",
+      "status": "stub"
+    },
+    {
+      "type": "alt-php",
+      "name": "Alternative PHP",
+      "description": "Alternative PHP packages",
+      "status": "stub"
+    },
+    {
+      "type": "docker",
+      "name": "Docker PHP",
+      "description": "Docker-hosted PHP containers",
+      "status": "stub"
+    }
+  ]
+}
+```
+
+**Example:**
+```bash
+curl http://localhost:8080/api/v1/providers
+```
+
+---
+
+#### POST /api/v1/providers/{provider}/install/{version}
+
+Install a PHP version using a specific provider.
+
+**Parameters:**
+- `provider` (path parameter) - Provider type: `remi`, `lsphp`, `alt-php`, or `docker`
+- `version` (path parameter) - PHP version to install (e.g., `8.2`, `8.1`, `8.3`)
+
+**Response:**
+```json
+{
+  "message": "PHP installed successfully",
+  "version": "8.2",
+  "provider": "lsphp"
+}
+```
+
+**Example:**
+```bash
+curl -X POST http://localhost:8080/api/v1/providers/lsphp/install/8.2
+curl -X POST http://localhost:8080/api/v1/providers/alt-php/install/8.2
+curl -X POST http://localhost:8080/api/v1/providers/docker/install/8.2
+```
+
+**Error Response (400):**
+```json
+{
+  "error": "Invalid provider: invalid-provider"
+}
+```
+
+---
+
+#### GET /api/v1/providers/{provider}/versions
+
+List installed PHP versions for a specific provider.
+
+**Parameters:**
+- `provider` (path parameter) - Provider type: `remi`, `lsphp`, `alt-php`, or `docker`
+
+**Response:**
+```json
+{
+  "provider": "lsphp",
+  "versions": ["8.2", "8.1", "8.0"]
+}
+```
+
+**Example:**
+```bash
+curl http://localhost:8080/api/v1/providers/lsphp/versions
+```
+
+**Error Response (400):**
+```json
+{
+  "error": "Invalid provider: invalid-provider"
+}
+```
+
+---
+
+#### GET /api/v1/providers/{provider}/available
+
+List available PHP versions for a specific provider.
+
+**Parameters:**
+- `provider` (path parameter) - Provider type: `remi`, `lsphp`, `alt-php`, or `docker`
+
+**Response:**
+```json
+{
+  "provider": "lsphp",
+  "versions": ["8.3", "8.2", "8.1", "8.0", "7.4"]
+}
+```
+
+**Example:**
+```bash
+curl http://localhost:8080/api/v1/providers/lsphp/available
+```
+
+**Error Response (400):**
+```json
+{
+  "error": "Invalid provider: invalid-provider"
+}
+```
+
+---
+
 ## Response Status Codes
 
 - `200 OK` - Request successful
@@ -328,19 +472,35 @@ All error responses follow this format:
 
 ### Complete Workflow
 
-1. **Check available PHP versions:**
+1. **List available providers:**
 ```bash
-curl http://localhost:8080/api/v1/php/available
+curl http://localhost:8080/api/v1/providers
 ```
 
-2. **Install PHP 8.2:**
+2. **Check available PHP versions:**
+```bash
+curl http://localhost:8080/api/v1/php/available
+# Or for specific provider:
+curl http://localhost:8080/api/v1/providers/lsphp/available
+```
+
+3. **Install PHP 8.2 (default provider):**
 ```bash
 curl -X POST http://localhost:8080/api/v1/php/install/8.2
 ```
 
-3. **List installed PHP versions:**
+4. **Install PHP 8.2 with specific provider:**
+```bash
+curl -X POST http://localhost:8080/api/v1/php/install/8.2?provider=lsphp
+# Or using provider-specific endpoint:
+curl -X POST http://localhost:8080/api/v1/providers/lsphp/install/8.2
+```
+
+5. **List installed PHP versions:**
 ```bash
 curl http://localhost:8080/api/v1/php/versions
+# Or for specific provider:
+curl http://localhost:8080/api/v1/providers/lsphp/versions
 ```
 
 4. **Create a pool for user "john":**

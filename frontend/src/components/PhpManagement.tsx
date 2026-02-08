@@ -4,10 +4,7 @@ import { apiService } from '../services/api'
 export default function PhpManagement() {
   const [versions, setVersions] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
-  const [installing, setInstalling] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
-  const [newVersion, setNewVersion] = useState('8.2')
 
   useEffect(() => {
     loadVersions()
@@ -26,91 +23,18 @@ export default function PhpManagement() {
     setLoading(false)
   }
 
-  const handleInstall = async () => {
-    if (!newVersion.trim()) {
-      setError('Please enter a PHP version')
-      return
-    }
-
-    setInstalling(newVersion)
-    setError(null)
-    setSuccess(null)
-
-    const result = await apiService.installPhpVersion(newVersion)
-    
-    if (result.data) {
-      setSuccess(`PHP ${newVersion} installed successfully!`)
-      setNewVersion('8.2')
-      await loadVersions()
-    } else {
-      setError(result.error || 'Failed to install PHP version')
-    }
-
-    setInstalling(null)
-  }
-
   return (
     <div className="space-y-6">
       <div>
         <h2 className="text-3xl font-bold text-gray-900 mb-2">PHP Version Management</h2>
-        <p className="text-gray-600">Install and manage PHP versions</p>
+        <p className="text-gray-600">View installed PHP versions</p>
       </div>
 
-      {/* Install PHP Version */}
-      <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
-        <h3 className="text-xl font-semibold text-gray-900 mb-4">Install PHP Version</h3>
-        
-        <div className="flex gap-4">
-          <div className="flex-1">
-            <label htmlFor="php-version" className="block text-sm font-medium text-gray-700 mb-2">
-              PHP Version
-            </label>
-            <input
-              type="text"
-              id="php-version"
-              value={newVersion}
-              onChange={(e) => setNewVersion(e.target.value)}
-              placeholder="8.2, 8.1, 8.3, etc."
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              disabled={!!installing}
-            />
-            <p className="mt-2 text-sm text-gray-500">
-              Enter version number (e.g., 8.2, 8.1, 8.3)
-            </p>
-          </div>
-          <div className="flex items-end">
-            <button
-              onClick={handleInstall}
-              disabled={!!installing}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
-            >
-              {installing ? (
-                <>
-                  <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                  </svg>
-                  Installing...
-                </>
-              ) : (
-                'Install'
-              )}
-            </button>
-          </div>
+      {error && (
+        <div className="bg-red-50 border-l-4 border-red-400 p-4 rounded">
+          <p className="text-sm text-red-700">{error}</p>
         </div>
-
-        {error && (
-          <div className="mt-4 bg-red-50 border-l-4 border-red-400 p-4 rounded">
-            <p className="text-sm text-red-700">{error}</p>
-          </div>
-        )}
-
-        {success && (
-          <div className="mt-4 bg-green-50 border-l-4 border-green-400 p-4 rounded">
-            <p className="text-sm text-green-700">{success}</p>
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Installed Versions */}
       <div className="bg-white rounded-lg shadow-md p-6 border border-gray-200">
