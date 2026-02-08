@@ -10,6 +10,7 @@ import (
 	"lightweight-php/db"
 	"lightweight-php/provider"
 	"lightweight-php/system"
+	"lightweight-php/templates"
 )
 
 type Pool struct {
@@ -103,12 +104,18 @@ func (pm *PoolManager) CreatePool(username, phpVersion, providerType string) err
 	}
 
 	// Get user info
-	u, _ := user.Lookup(username)
+	u, err := user.Lookup(username)
+	if err != nil {
+		return fmt.Errorf("failed to lookup user: %w", err)
+	}
 	uid := u.Uid
 	gid := u.Gid
 
-	// Create pool configuration
-	config := pm.generatePoolConfig(username, uid, gid, socketPath, phpVersion)
+	// Create pool configuration using template
+	config, err := pm.generatePoolConfig(username, uid, gid, socketPath, phpVersion)
+	if err != nil {
+		return fmt.Errorf("failed to generate pool config: %w", err)
+	}
 
 	// Write pool configuration
 	if err := os.WriteFile(configPath, []byte(config), 0644); err != nil {
@@ -205,30 +212,37 @@ func (pm *PoolManager) ListPools() ([]Pool, error) {
 	return pools, nil
 }
 
-func (pm *PoolManager) generatePoolConfig(username, uid, gid, socketPath, phpVersion string) string {
-	config := fmt.Sprintf(`[%s]
-user = %s
-group = %s
-listen = %s
-listen.owner = %s
-listen.group = %s
-listen.mode = 0660
+func (pm *PoolManager) generatePoolConfig(username, uid, gid, socketPath, phpVersion string) (string, error) {
+	// Get user group name
+	u, err := user.LookupId(uid)
+	if err != nil {
+		return "", fmt.Errorf("failed to lookup user: %w", err)
+	}
+	
+	groupName := username
+	if u.Gid != "" {
+		g, err := user.LookupGroupId(u.Gid)
+		if err == nil {
+			groupName = g.Name
+		}
+	}
 
-pm = dynamic
-pm.max_children = 50
-pm.start_servers = 5
-pm.min_spare_servers = 5
-pm.max_spare_servers = 35
-pm.max_requests = 500
+	// Load template
+	templateContent, err := templates.LoadTemplate("pool.conf.tmpl")
+	if err != nil {
+		return "", fmt.Errorf("failed to load template: %w", err)
+	}
 
-php_admin_value[sendmail_path] = /usr/sbin/sendmail -t -i -f www@my.domain.com
-php_flag[display_errors] = off
-php_admin_value[error_log] = /var/log/fpm-php.%s.log
-php_admin_flag[log_errors] = on
-php_admin_value[memory_limit] = 128M
-`, username, username, username, socketPath, username, username, username)
+	// Create template data with defaults
+	data := templates.DefaultPoolConfigData(username, groupName, socketPath)
 
-	return config
+	// Render template
+	config, err := templates.RenderPoolConfig(templateContent, data)
+	if err != nil {
+		return "", fmt.Errorf("failed to render template: %w", err)
+	}
+
+	return config, nil
 }
 
 func (pm *PoolManager) reloadFPMService(serviceName string) error {

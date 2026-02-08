@@ -1,0 +1,39 @@
+[{{.PoolName}}]
+user = {{.Username}}
+group = {{.Group}}
+listen = {{.SocketPath}}
+listen.owner = {{.Username}}
+listen.group = {{.Group}}
+listen.mode = {{.ListenMode}}
+
+pm = {{.ProcessManager}}
+pm.max_children = {{.MaxChildren}}
+pm.start_servers = {{.StartServers}}
+pm.min_spare_servers = {{.MinSpareServers}}
+pm.max_spare_servers = {{.MaxSpareServers}}
+pm.max_requests = {{.MaxRequests}}
+{{- if .ProcessIdleTimeout}}
+pm.process_idle_timeout = {{.ProcessIdleTimeout}}
+{{- end}}
+
+{{- if .SendmailPath}}
+php_admin_value[sendmail_path] = {{.SendmailPath}}
+{{- end}}
+php_flag[display_errors] = {{.DisplayErrors}}
+php_admin_value[error_log] = {{.ErrorLog}}
+php_admin_flag[log_errors] = {{.LogErrors}}
+{{- if .MemoryLimit}}
+php_admin_value[memory_limit] = {{.MemoryLimit}}
+{{- end}}
+{{- if .MaxExecutionTime}}
+php_admin_value[max_execution_time] = {{.MaxExecutionTime}}
+{{- end}}
+{{- if .UploadMaxFilesize}}
+php_admin_value[upload_max_filesize] = {{.UploadMaxFilesize}}
+{{- end}}
+{{- if .PostMaxSize}}
+php_admin_value[post_max_size] = {{.PostMaxSize}}
+{{- end}}
+{{- if .DateTimezone}}
+php_admin_value[date.timezone] = {{.DateTimezone}}
+{{- end}}
