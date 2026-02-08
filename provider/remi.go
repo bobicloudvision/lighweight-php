@@ -38,7 +38,8 @@ func (p *RemiProvider) GetServiceName(version string) string {
 
 func (p *RemiProvider) GetSocketPath(username, version string) string {
 	if p.osFamily == system.OSRHEL {
-		return fmt.Sprintf("/var/run/php-fpm/%s.sock", username)
+		versionNum := strings.ReplaceAll(version, ".", "")
+		return fmt.Sprintf("/var/opt/remi/php%s/run/php-fpm/%s.sock", versionNum, username)
 	}
 	return fmt.Sprintf("/var/run/php/php%s-%s.sock", version, username)
 }
