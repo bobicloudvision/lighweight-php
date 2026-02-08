@@ -129,7 +129,10 @@ export default function Marketplace() {
     }
 
     if (installedResult.data && installedResult.data.versions) {
-      setInstalledVersions(Array.isArray(installedResult.data.versions) ? installedResult.data.versions : [])
+      const versionsList = Array.isArray(installedResult.data.versions) ? installedResult.data.versions : []
+      // Extract version strings from PhpVersion objects (backward compatible)
+      const versionStrings = versionsList.map(v => typeof v === 'string' ? v : v.version)
+      setInstalledVersions(versionStrings)
     } else {
       setInstalledVersions([])
     }
@@ -155,7 +158,9 @@ export default function Marketplace() {
     }
 
     if (installedResult.data && installedResult.data.versions) {
-      setInstalledVersions(Array.isArray(installedResult.data.versions) ? installedResult.data.versions : [])
+      // Provider-specific versions are still string arrays
+      const versionsList = Array.isArray(installedResult.data.versions) ? installedResult.data.versions : []
+      setInstalledVersions(versionsList)
     } else {
       setInstalledVersions([])
     }

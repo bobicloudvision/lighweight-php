@@ -87,11 +87,13 @@ export default function PoolManagement() {
     // Fallback to all installed versions
     const result = await apiService.getPhpVersions()
     if (result.data && result.data.versions) {
-      const versions = Array.isArray(result.data.versions) ? result.data.versions : []
-      setInstalledVersions(versions)
+      const versionsList = Array.isArray(result.data.versions) ? result.data.versions : []
+      // Extract version strings from PhpVersion objects
+      const versionStrings = versionsList.map(v => typeof v === 'string' ? v : v.version)
+      setInstalledVersions(versionStrings)
       // Set default version if available and not already set
-      if (versions.length > 0 && !phpVersion) {
-        setPhpVersion(versions[0])
+      if (versionStrings.length > 0 && !phpVersion) {
+        setPhpVersion(versionStrings[0])
       }
     } else {
       setInstalledVersions([])

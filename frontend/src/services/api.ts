@@ -19,6 +19,12 @@ export interface Provider {
   status: string
 }
 
+export interface PhpVersion {
+  version: string
+  provider: string
+  status: string
+}
+
 export interface PoolConfig {
   max_children?: number
   start_servers?: number
@@ -106,8 +112,8 @@ class ApiService {
     return this.request<{ provider: string; versions: string[] }>(`/api/v1/providers/${provider}/available`)
   }
 
-  async getPhpVersions(): Promise<ApiResponse<{ versions: string[] }>> {
-    return this.request<{ versions: string[] }>('/api/v1/php/versions')
+  async getPhpVersions(): Promise<ApiResponse<{ versions: PhpVersion[] }>> {
+    return this.request<{ versions: PhpVersion[] }>('/api/v1/php/versions')
   }
 
   async getAvailablePhpVersions(): Promise<ApiResponse<{ versions: string[] }>> {

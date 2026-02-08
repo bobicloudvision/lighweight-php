@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react'
 import { apiService } from '../services/api'
+import type { PhpVersion } from '../services/api'
 
 export default function PhpManagement() {
-  const [versions, setVersions] = useState<string[]>([])
+  const [versions, setVersions] = useState<PhpVersion[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -15,7 +16,8 @@ export default function PhpManagement() {
     setError(null)
     const result = await apiService.getPhpVersions()
     if (result.data && result.data.versions) {
-      setVersions(Array.isArray(result.data.versions) ? result.data.versions : [])
+      const versionsList = Array.isArray(result.data.versions) ? result.data.versions : []
+      setVersions(versionsList)
     } else {
       setError(result.error || 'Failed to load PHP versions')
       setVersions([])
@@ -69,19 +71,31 @@ export default function PhpManagement() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {versions.map((version) => (
               <div
-                key={version}
+                key={`${version.version}-${version.provider}`}
                 className="bg-gradient-to-br from-blue-50 to-blue-100 border border-blue-200 rounded-lg p-4"
               >
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-3">
                   <div>
                     <p className="text-sm font-medium text-gray-600">PHP Version</p>
-                    <p className="text-2xl font-bold text-gray-900 mt-1">{version}</p>
+                    <p className="text-2xl font-bold text-gray-900 mt-1">{version.version}</p>
                   </div>
                   <div className="w-10 h-10 rounded-full bg-blue-200 flex items-center justify-center">
                     <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4" />
                     </svg>
                   </div>
+                </div>
+                <div className="flex flex-wrap gap-2 mt-3">
+                  <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded text-xs font-medium">
+                    {version.provider}
+                  </span>
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                    version.status === 'active'
+                      ? 'bg-green-100 text-green-800'
+                      : 'bg-gray-100 text-gray-800'
+                  }`}>
+                    {version.status}
+                  </span>
                 </div>
               </div>
             ))}

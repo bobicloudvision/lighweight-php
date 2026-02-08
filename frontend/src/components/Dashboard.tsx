@@ -21,7 +21,8 @@ export default function Dashboard() {
       // Get PHP versions count
       const versions = await apiService.getPhpVersions()
       if (versions.data && versions.data.versions) {
-        setPhpVersionsCount(Array.isArray(versions.data.versions) ? versions.data.versions.length : 0)
+        const versionsList = Array.isArray(versions.data.versions) ? versions.data.versions : []
+        setPhpVersionsCount(versionsList.length)
       }
     }
 
