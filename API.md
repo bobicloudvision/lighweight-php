@@ -299,6 +299,99 @@ curl http://localhost:8080/api/v1/pools/john
 
 ---
 
+#### PUT /api/v1/pools/{username}/config
+
+Update pool configuration settings.
+
+**Parameters:**
+- `username` (path parameter) - Username to update pool configuration for
+
+**Request Body:**
+```json
+{
+  "max_children": 100,
+  "start_servers": 10,
+  "min_spare_servers": 5,
+  "max_spare_servers": 20,
+  "max_requests": 1000,
+  "memory_limit": "256M",
+  "max_execution_time": "300",
+  "upload_max_filesize": "64M",
+  "post_max_size": "64M",
+  "display_errors": "off",
+  "log_errors": "on",
+  "date_timezone": "UTC",
+  "process_manager": "dynamic",
+  "process_idle_timeout": "10s"
+}
+```
+
+**Fields (all optional):**
+- `max_children` (integer) - Maximum number of child processes
+- `start_servers` (integer) - Number of servers to start initially
+- `min_spare_servers` (integer) - Minimum number of idle servers
+- `max_spare_servers` (integer) - Maximum number of idle servers
+- `max_requests` (integer) - Maximum requests per child process
+- `process_manager` (string) - Process manager type: "dynamic", "static", or "ondemand"
+- `memory_limit` (string) - PHP memory limit (e.g., "128M", "256M")
+- `max_execution_time` (string/integer) - Maximum execution time in seconds
+- `upload_max_filesize` (string) - Maximum upload file size (e.g., "64M")
+- `post_max_size` (string) - Maximum POST data size (e.g., "64M")
+- `display_errors` (string/boolean) - Display errors: "on"/"off" or true/false
+- `log_errors` (string/boolean) - Log errors: "on"/"off" or true/false
+- `date_timezone` (string) - Default timezone (e.g., "UTC", "America/New_York")
+- `sendmail_path` (string) - Sendmail path
+- `process_idle_timeout` (string/integer) - Process idle timeout
+- `listen_mode` (string) - Socket file permissions (e.g., "0660")
+
+**Response (200):**
+```json
+{
+  "message": "Pool configuration updated successfully",
+  "username": "john",
+  "settings": {
+    "max_children": 100,
+    "memory_limit": "256M"
+  }
+}
+```
+
+**Example:**
+```bash
+curl -X PUT http://localhost:8080/api/v1/pools/john/config \
+  -H "Content-Type: application/json" \
+  -d '{
+    "max_children": 100,
+    "memory_limit": "256M",
+    "max_execution_time": "300"
+  }'
+```
+
+**Error Responses:**
+
+**400 Bad Request:**
+```json
+{
+  "error": "No settings provided"
+}
+```
+
+**404 Not Found:**
+```json
+{
+  "error": "pool for user john not found"
+}
+```
+
+**500 Internal Server Error:**
+```json
+{
+  "error": "failed to write pool config: ..."
+}
+```
+
+---
+
 #### DELETE /api/v1/pools/{username}
 
 Delete a PHP-FPM pool for a user.

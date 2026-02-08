@@ -232,6 +232,170 @@ func (pm *PoolManager) ListPools() ([]Pool, error) {
 	return pools, nil
 }
 
+func (pm *PoolManager) UpdatePoolConfig(username string, settings map[string]interface{}) error {
+	// Get pool from database
+	dbPool, err := pm.db.GetPool(username)
+	if err != nil {
+		return fmt.Errorf("failed to get pool from database: %w", err)
+	}
+	if dbPool == nil {
+		return fmt.Errorf("pool for user %s not found", username)
+	}
+
+	// Get user info for group name
+	u, err := user.Lookup(username)
+	if err != nil {
+		return fmt.Errorf("failed to lookup user: %w", err)
+	}
+
+	// Get group name
+	groupName := username
+	if u.Gid != "" {
+		g, err := user.LookupGroupId(u.Gid)
+		if err == nil {
+			groupName = g.Name
+		}
+	}
+
+	// Load template
+	templateContent, err := templates.LoadTemplate("pool.conf.tmpl")
+	if err != nil {
+		return fmt.Errorf("failed to load template: %w", err)
+	}
+
+	// Create template data with defaults
+	data := templates.DefaultPoolConfigData(username, groupName, dbPool.SocketPath)
+
+	// Apply custom settings
+	if err := applyPoolSettings(data, settings); err != nil {
+		return fmt.Errorf("failed to apply settings: %w", err)
+	}
+
+	// Render template
+	config, err := templates.RenderPoolConfig(templateContent, data)
+	if err != nil {
+		return fmt.Errorf("failed to render template: %w", err)
+	}
+
+	// Write updated configuration
+	if err := os.WriteFile(dbPool.ConfigPath, []byte(config), 0644); err != nil {
+		return fmt.Errorf("failed to write pool config: %w", err)
+	}
+
+	// Reload PHP-FPM
+	var providerTypeEnum provider.ProviderType
+	switch dbPool.Provider {
+	case "remi":
+		providerTypeEnum = provider.ProviderRemi
+	case "lsphp":
+		providerTypeEnum = provider.ProviderLiteSpeed
+	case "alt-php":
+		providerTypeEnum = provider.ProviderAltPHP
+	case "docker":
+		providerTypeEnum = provider.ProviderDocker
+	default:
+		providerTypeEnum = provider.ProviderRemi
+	}
+
+	phpProvider, err := pm.providerFactory.CreateProvider(providerTypeEnum)
+	if err == nil {
+		serviceName := phpProvider.GetServiceName(dbPool.PHPVersion)
+		if err := pm.reloadFPMService(serviceName); err != nil {
+			return fmt.Errorf("failed to reload PHP-FPM: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func applyPoolSettings(data *templates.PoolConfigData, settings map[string]interface{}) error {
+	for key, value := range settings {
+		switch key {
+		case "max_children":
+			if v, ok := value.(float64); ok {
+				data.MaxChildren = int(v)
+			}
+		case "start_servers":
+			if v, ok := value.(float64); ok {
+				data.StartServers = int(v)
+			}
+		case "min_spare_servers":
+			if v, ok := value.(float64); ok {
+				data.MinSpareServers = int(v)
+			}
+		case "max_spare_servers":
+			if v, ok := value.(float64); ok {
+				data.MaxSpareServers = int(v)
+			}
+		case "max_requests":
+			if v, ok := value.(float64); ok {
+				data.MaxRequests = int(v)
+			}
+		case "process_manager":
+			if v, ok := value.(string); ok {
+				data.ProcessManager = v
+			}
+		case "memory_limit":
+			if v, ok := value.(string); ok {
+				data.MemoryLimit = v
+			}
+		case "max_execution_time":
+			if v, ok := value.(string); ok {
+				data.MaxExecutionTime = v
+			} else if v, ok := value.(float64); ok {
+				data.MaxExecutionTime = fmt.Sprintf("%.0f", v)
+			}
+		case "upload_max_filesize":
+			if v, ok := value.(string); ok {
+				data.UploadMaxFilesize = v
+			}
+		case "post_max_size":
+			if v, ok := value.(string); ok {
+				data.PostMaxSize = v
+			}
+		case "display_errors":
+			if v, ok := value.(string); ok {
+				data.DisplayErrors = v
+			} else if v, ok := value.(bool); ok {
+				if v {
+					data.DisplayErrors = "on"
+				} else {
+					data.DisplayErrors = "off"
+				}
+			}
+		case "log_errors":
+			if v, ok := value.(string); ok {
+				data.LogErrors = v
+			} else if v, ok := value.(bool); ok {
+				if v {
+					data.LogErrors = "on"
+				} else {
+					data.LogErrors = "off"
+				}
+			}
+		case "date_timezone":
+			if v, ok := value.(string); ok {
+				data.DateTimezone = v
+			}
+		case "sendmail_path":
+			if v, ok := value.(string); ok {
+				data.SendmailPath = v
+			}
+		case "process_idle_timeout":
+			if v, ok := value.(string); ok {
+				data.ProcessIdleTimeout = v
+			} else if v, ok := value.(float64); ok {
+				data.ProcessIdleTimeout = fmt.Sprintf("%.0f", v)
+			}
+		case "listen_mode":
+			if v, ok := value.(string); ok {
+				data.ListenMode = v
+			}
+		}
+	}
+	return nil
+}
+
 func (pm *PoolManager) generatePoolConfig(username, uid, gid, socketPath, phpVersion string) (string, error) {
 	// Get user group name
 	u, err := user.LookupId(uid)

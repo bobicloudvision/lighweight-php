@@ -43,6 +43,7 @@ func (r *Router) setupRoutes() {
 	r.HandleFunc("/api/v1/pools", r.createPool).Methods("POST")
 	r.HandleFunc("/api/v1/pools/{username}", r.getPool).Methods("GET")
 	r.HandleFunc("/api/v1/pools/{username}", r.deletePool).Methods("DELETE")
+	r.HandleFunc("/api/v1/pools/{username}/config", r.updatePoolConfig).Methods("PUT", "PATCH")
 
 	// PHP installation endpoints
 	r.HandleFunc("/api/v1/php/install/{version}", r.installPHP).Methods("POST")
@@ -140,6 +141,33 @@ func (r *Router) deletePool(w http.ResponseWriter, req *http.Request) {
 	jsonResponse(w, http.StatusOK, map[string]string{
 		"message":  "Pool deleted successfully",
 		"username": username,
+	})
+}
+
+func (r *Router) updatePoolConfig(w http.ResponseWriter, req *http.Request) {
+	vars := mux.Vars(req)
+	username := vars["username"]
+
+	var settings map[string]interface{}
+	if err := json.NewDecoder(req.Body).Decode(&settings); err != nil {
+		jsonError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+
+	if len(settings) == 0 {
+		jsonError(w, http.StatusBadRequest, "No settings provided")
+		return
+	}
+
+	if err := r.poolManager.UpdatePoolConfig(username, settings); err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"message":  "Pool configuration updated successfully",
+		"username": username,
+		"settings": settings,
 	})
 }
 
