@@ -152,6 +152,10 @@ func (r *Router) listPHPVersions(w http.ResponseWriter, req *http.Request) {
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
+	// Ensure versions is never nil
+	if versions == nil {
+		versions = []string{}
+	}
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
 		"versions": versions,
 	})

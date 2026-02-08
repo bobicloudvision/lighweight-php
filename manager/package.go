@@ -204,7 +204,7 @@ func (pm *PackageManager) ensureRemiRepo() error {
 func (pm *PackageManager) ListInstalledPHP() ([]string, error) {
 	// Try to get from database first
 	dbVersions, err := pm.db.ListPHPVersions()
-	if err == nil && len(dbVersions) > 0 {
+	if err == nil && dbVersions != nil && len(dbVersions) > 0 {
 		versions := make([]string, 0, len(dbVersions))
 		for _, v := range dbVersions {
 			if v.Status == "active" {
@@ -217,25 +217,58 @@ func (pm *PackageManager) ListInstalledPHP() ([]string, error) {
 	}
 
 	// Fallback to system detection
-	var versions []string
+	versions := make([]string, 0)
 
 	if pm.osFamily == system.OSRHEL {
 		// Check for installed PHP packages
-		cmd := exec.Command("rpm", "-qa", "--queryformat", "%{NAME}\n")
 		if pm.hasCommand("dnf") {
-			cmd = exec.Command("dnf", "list", "installed", "php*-php-fpm")
+			cmd := exec.Command("dnf", "list", "installed", "php*-php-fpm")
+			output, err := cmd.Output()
+			if err == nil {
+				lines := strings.Split(string(output), "\n")
+				for _, line := range lines {
+					if strings.Contains(line, "php") && strings.Contains(line, "fpm") {
+						// Extract version from package name like "php82-php-fpm"
+						parts := strings.Fields(line)
+						if len(parts) > 0 {
+							pkgName := parts[0]
+							// Extract version from package name
+							if strings.HasPrefix(pkgName, "php") {
+								versionNum := strings.TrimPrefix(pkgName, "php")
+								if idx := strings.Index(versionNum, "-php-fpm"); idx > 0 {
+									versionNum = versionNum[:idx]
+									if len(versionNum) >= 2 {
+										version := fmt.Sprintf("%s.%s", versionNum[0:1], versionNum[1:])
+										versions = append(versions, version)
+									}
+								}
+							}
+						}
+					}
+				}
+			}
 		} else {
-			cmd = exec.Command("yum", "list", "installed", "php*-php-fpm")
-		}
-		output, err := cmd.Output()
-		if err == nil {
-			lines := strings.Split(string(output), "\n")
-			for _, line := range lines {
-				if strings.Contains(line, "php") && strings.Contains(line, "fpm") {
-					// Extract version from package name
-					parts := strings.Fields(line)
-					if len(parts) > 0 {
-						versions = append(versions, parts[0])
+			cmd := exec.Command("yum", "list", "installed", "php*-php-fpm")
+			output, err := cmd.Output()
+			if err == nil {
+				lines := strings.Split(string(output), "\n")
+				for _, line := range lines {
+					if strings.Contains(line, "php") && strings.Contains(line, "fpm") {
+						// Extract version from package name
+						parts := strings.Fields(line)
+						if len(parts) > 0 {
+							pkgName := parts[0]
+							if strings.HasPrefix(pkgName, "php") {
+								versionNum := strings.TrimPrefix(pkgName, "php")
+								if idx := strings.Index(versionNum, "-php-fpm"); idx > 0 {
+									versionNum = versionNum[:idx]
+									if len(versionNum) >= 2 {
+										version := fmt.Sprintf("%s.%s", versionNum[0:1], versionNum[1:])
+										versions = append(versions, version)
+									}
+								}
+							}
+						}
 					}
 				}
 			}
@@ -254,6 +287,10 @@ func (pm *PackageManager) ListInstalledPHP() ([]string, error) {
 		}
 	}
 
+	// Always return a non-nil slice (empty slice if no versions found)
+	if versions == nil {
+		versions = []string{}
+	}
 	return versions, nil
 }
 

@@ -58,16 +58,17 @@ func (db *Database) GetPHPVersion(version string) (*PHPVersion, error) {
 func (db *Database) ListPHPVersions() ([]PHPVersion, error) {
 	rows, err := db.Query("SELECT id, version, installed_at, status, package_manager, os_family FROM php_versions ORDER BY version DESC")
 	if err != nil {
-		return nil, err
+		// Return empty slice instead of nil on error
+		return []PHPVersion{}, err
 	}
 	defer rows.Close()
 
-	var versions []PHPVersion
+	versions := make([]PHPVersion, 0)
 	for rows.Next() {
 		var pv PHPVersion
 		var installedAt sql.NullTime
 		if err := rows.Scan(&pv.ID, &pv.Version, &installedAt, &pv.Status, &pv.PackageManager, &pv.OSFamily); err != nil {
-			return nil, err
+			return []PHPVersion{}, err
 		}
 		if installedAt.Valid {
 			pv.InstalledAt = installedAt.Time
@@ -75,7 +76,15 @@ func (db *Database) ListPHPVersions() ([]PHPVersion, error) {
 		versions = append(versions, pv)
 	}
 
-	return versions, rows.Err()
+	if err := rows.Err(); err != nil {
+		return []PHPVersion{}, err
+	}
+
+	// Always return a non-nil slice
+	if versions == nil {
+		versions = []PHPVersion{}
+	}
+	return versions, nil
 }
 
 func (db *Database) CreatePool(username, phpVersion, socketPath, configPath string) error {
