@@ -210,7 +210,7 @@ func (r *Router) listProviders(w http.ResponseWriter, req *http.Request) {
 			"type":        "lsphp",
 			"name":        "LiteSpeed PHP",
 			"description": "LiteSpeed Web Server PHP",
-			"status":      "stub",
+			"status":      "active",
 		},
 		{
 			"type":        "alt-php",
