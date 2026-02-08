@@ -15,7 +15,7 @@ export default function Dashboard() {
       // Get pools count
       const pools = await apiService.getPools()
       if (pools.data) {
-        setPoolsCount(pools.data.length)
+        setPoolsCount(Array.isArray(pools.data) ? pools.data.length : 0)
       }
 
       // Get PHP versions count

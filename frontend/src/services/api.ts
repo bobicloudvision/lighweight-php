@@ -1,6 +1,6 @@
 // Use relative URLs in development (via Vite proxy) or absolute URL in production
 const API_BASE_URL = import.meta.env.PROD 
-  ? 'http://95.217.213.18:8988'
+  ? 'http://95.217.213.18:8981'
   : '' // Empty string means use relative URLs (goes through Vite proxy)
 
 export interface Pool {

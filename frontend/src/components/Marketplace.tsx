@@ -95,14 +95,17 @@ export default function Marketplace() {
       apiService.getPhpVersions(),
     ])
 
-    if (availableResult.data) {
-      setAvailableVersions(availableResult.data.versions)
+    if (availableResult.data && availableResult.data.versions) {
+      setAvailableVersions(Array.isArray(availableResult.data.versions) ? availableResult.data.versions : [])
     } else {
       setError(availableResult.error || 'Failed to load available versions')
+      setAvailableVersions([])
     }
 
-    if (installedResult.data) {
-      setInstalledVersions(installedResult.data.versions)
+    if (installedResult.data && installedResult.data.versions) {
+      setInstalledVersions(Array.isArray(installedResult.data.versions) ? installedResult.data.versions : [])
+    } else {
+      setInstalledVersions([])
     }
 
     setLoading(false)

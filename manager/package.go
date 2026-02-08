@@ -1,6 +1,7 @@
 package manager
 
 import (
+	"bytes"
 	"fmt"
 	"os/exec"
 	"strings"
@@ -30,6 +31,11 @@ func NewPackageManager() (*PackageManager, error) {
 }
 
 func (pm *PackageManager) InstallPHP(version string) error {
+	// Validate minimum PHP version (7.4)
+	if version < "7.4" {
+		return fmt.Errorf("PHP version %s is not supported. Minimum version is 7.4", version)
+	}
+
 	// Normalize version (e.g., "8.2" -> "82" for package names)
 	versionNum := strings.ReplaceAll(version, ".", "")
 
@@ -46,35 +52,97 @@ func (pm *PackageManager) installPHPRHEL(version, versionNum string) error {
 		return fmt.Errorf("failed to setup Remi repository: %w", err)
 	}
 
-	// Enable Remi repository for the specific PHP version
-	enableCmd := exec.Command("yum", "config-manager", "--enable", fmt.Sprintf("remi-php%s", versionNum))
-	if enableCmd.Run() != nil {
-		// Try with dnf if yum is not available
-		enableCmd = exec.Command("dnf", "config-manager", "--enable", fmt.Sprintf("remi-php%s", versionNum))
-		if err := enableCmd.Run(); err != nil {
-			return fmt.Errorf("failed to enable Remi repository: %w", err)
+	// Try to enable Remi repository for the specific PHP version (non-fatal if it fails)
+	repoName := fmt.Sprintf("remi-php%s", versionNum)
+	
+	// Check if repository exists before trying to enable it
+	var repoExists bool
+	if pm.hasCommand("dnf") {
+		checkCmd := exec.Command("dnf", "repolist", "--all", "--quiet")
+		output, err := checkCmd.Output()
+		if err == nil {
+			repoExists = strings.Contains(string(output), repoName)
+		}
+	} else {
+		checkCmd := exec.Command("yum", "repolist", "all", "-q")
+		output, err := checkCmd.Output()
+		if err == nil {
+			repoExists = strings.Contains(string(output), repoName)
+		}
+	}
+	
+	// Only try to enable if repository exists
+	if repoExists {
+		if pm.hasCommand("yum-config-manager") {
+			enableCmd := exec.Command("yum-config-manager", "--enable", repoName)
+			enableCmd.Stdout = nil
+			enableCmd.Stderr = nil
+			enableCmd.Run() // Ignore errors
+		} else if pm.hasCommand("dnf") {
+			enableCmd := exec.Command("dnf", "config-manager", "--enable", repoName)
+			enableCmd.Stdout = nil
+			enableCmd.Stderr = nil
+			enableCmd.Run() // Ignore errors
 		}
 	}
 
-	// Install PHP and PHP-FPM
+	// Install PHP and PHP-FPM with repository enabled
+	// Note: In Remi repository, packages are named like php82-php-fpm, php82-php-cli, etc.
 	packages := []string{
-		fmt.Sprintf("php%s", versionNum),
 		fmt.Sprintf("php%s-php-fpm", versionNum),
 		fmt.Sprintf("php%s-php-cli", versionNum),
 		fmt.Sprintf("php%s-php-common", versionNum),
 	}
 
 	var installCmd *exec.Cmd
-	if pm.hasCommand("dnf") {
-		installCmd = exec.Command("dnf", append([]string{"install", "-y"}, packages...)...)
+	var stderr bytes.Buffer
+	
+	// Try installation - use --enablerepo only if repository exists
+	if repoExists {
+		// Try with --enablerepo first
+		if pm.hasCommand("dnf") {
+			installCmd = exec.Command("dnf", append([]string{"install", "-y", fmt.Sprintf("--enablerepo=%s", repoName)}, packages...)...)
+		} else {
+			installCmd = exec.Command("yum", append([]string{"install", "-y", fmt.Sprintf("--enablerepo=%s", repoName)}, packages...)...)
+		}
 	} else {
-		installCmd = exec.Command("yum", append([]string{"install", "-y"}, packages...)...)
+		// Repository doesn't exist, try without --enablerepo
+		if pm.hasCommand("dnf") {
+			installCmd = exec.Command("dnf", append([]string{"install", "-y"}, packages...)...)
+		} else {
+			installCmd = exec.Command("yum", append([]string{"install", "-y"}, packages...)...)
+		}
 	}
 
+	installCmd.Stderr = &stderr
 	installCmd.Stdout = nil
-	installCmd.Stderr = nil
+
 	if err := installCmd.Run(); err != nil {
-		return fmt.Errorf("failed to install PHP packages: %w", err)
+		// If that fails and we used --enablerepo, try without it
+		if repoExists {
+			stderr.Reset()
+			if pm.hasCommand("dnf") {
+				installCmd = exec.Command("dnf", append([]string{"install", "-y"}, packages...)...)
+			} else {
+				installCmd = exec.Command("yum", append([]string{"install", "-y"}, packages...)...)
+			}
+			installCmd.Stderr = &stderr
+			installCmd.Stdout = nil
+			
+			if err := installCmd.Run(); err != nil {
+				errorMsg := strings.TrimSpace(stderr.String())
+				if errorMsg == "" {
+					errorMsg = err.Error()
+				}
+				return fmt.Errorf("failed to install PHP packages: %s", errorMsg)
+			}
+		} else {
+			errorMsg := strings.TrimSpace(stderr.String())
+			if errorMsg == "" {
+				errorMsg = err.Error()
+			}
+			return fmt.Errorf("failed to install PHP packages: %s", errorMsg)
+		}
 	}
 
 	// Enable and start PHP-FPM service
@@ -180,22 +248,62 @@ func (pm *PackageManager) ensureRemiRepo() error {
 		output, err = releaseCmd.Output()
 	}
 
-	var repoURL string
 	releaseStr := strings.TrimSpace(string(output))
-	if strings.Contains(releaseStr, "8") || strings.Contains(releaseStr, "9") {
-		repoURL = "https://rpms.remirepo.net/enterprise/remi-release-8.rpm"
+	var epelURL, remiURL string
+	var useDnf bool
+
+	// Determine EPEL and Remi URLs based on RHEL version
+	if strings.Contains(releaseStr, "10") {
+		epelURL = "https://dl.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm"
+		remiURL = "https://rpms.remirepo.net/enterprise/remi-release-10.rpm"
+		useDnf = true
+	} else if strings.Contains(releaseStr, "9") {
+		epelURL = "https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm"
+		remiURL = "https://rpms.remirepo.net/enterprise/remi-release-9.rpm"
+		useDnf = true
+	} else if strings.Contains(releaseStr, "8") {
+		epelURL = "https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm"
+		remiURL = "https://rpms.remirepo.net/enterprise/remi-release-8.rpm"
+		useDnf = true
 	} else if strings.Contains(releaseStr, "7") {
-		repoURL = "https://rpms.remirepo.net/enterprise/remi-release-7.rpm"
+		epelURL = "https://dl.fedoraproject.org/pub/epel/epel-release-latest-7.noarch.rpm"
+		remiURL = "https://rpms.remirepo.net/enterprise/remi-release-7.rpm"
+		useDnf = false
 	} else {
-		repoURL = "https://rpms.remirepo.net/enterprise/remi-release-8.rpm" // Default
+		// Default to RHEL 9
+		epelURL = "https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm"
+		remiURL = "https://rpms.remirepo.net/enterprise/remi-release-9.rpm"
+		useDnf = true
 	}
 
-	installCmd := exec.Command("yum", "install", "-y", repoURL)
-	if installCmd.Run() != nil {
-		installCmd = exec.Command("dnf", "install", "-y", repoURL)
-		if err := installCmd.Run(); err != nil {
-			return fmt.Errorf("failed to install Remi repository: %w", err)
+	// Install EPEL first (required for Remi)
+	checkEpelCmd := exec.Command("rpm", "-q", "epel-release")
+	if checkEpelCmd.Run() != nil {
+		// EPEL not installed, install it
+		var epelCmd *exec.Cmd
+		if useDnf {
+			epelCmd = exec.Command("dnf", "install", "-y", epelURL)
+		} else {
+			epelCmd = exec.Command("yum", "install", "-y", epelURL)
 		}
+		epelCmd.Stdout = nil
+		epelCmd.Stderr = nil
+		if err := epelCmd.Run(); err != nil {
+			return fmt.Errorf("failed to install EPEL repository: %w", err)
+		}
+	}
+
+	// Install Remi repository
+	var remiCmd *exec.Cmd
+	if useDnf {
+		remiCmd = exec.Command("dnf", "install", "-y", remiURL)
+	} else {
+		remiCmd = exec.Command("yum", "install", "-y", remiURL)
+	}
+	remiCmd.Stdout = nil
+	remiCmd.Stderr = nil
+	if err := remiCmd.Run(); err != nil {
+		return fmt.Errorf("failed to install Remi repository: %w", err)
 	}
 
 	return nil
@@ -304,34 +412,26 @@ func (pm *PackageManager) ListAvailablePHP() ([]string, error) {
 
 func (pm *PackageManager) listAvailablePHPRHEL() ([]string, error) {
 	// Hardcoded list of PHP versions available from Remi repository
+	// Minimum version is PHP 7.4
 	versions := []string{
 		"8.3",
 		"8.2",
 		"8.1",
 		"8.0",
 		"7.4",
-		"7.3",
-		"7.2",
-		"7.1",
-		"7.0",
-		"5.6",
 	}
 	return versions, nil
 }
 
 func (pm *PackageManager) listAvailablePHPDebian() ([]string, error) {
 	// Hardcoded list of PHP versions available from ondrej PPA
+	// Minimum version is PHP 7.4
 	versions := []string{
 		"8.3",
 		"8.2",
 		"8.1",
 		"8.0",
 		"7.4",
-		"7.3",
-		"7.2",
-		"7.1",
-		"7.0",
-		"5.6",
 	}
 	return versions, nil
 }

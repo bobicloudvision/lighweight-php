@@ -25,9 +25,10 @@ export default function PoolManagement() {
     setError(null)
     const result = await apiService.getPools()
     if (result.data) {
-      setPools(result.data)
+      setPools(Array.isArray(result.data) ? result.data : [])
     } else {
       setError(result.error || 'Failed to load pools')
+      setPools([])
     }
     setLoading(false)
   }

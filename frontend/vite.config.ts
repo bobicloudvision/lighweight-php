@@ -7,13 +7,13 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://95.217.213.18:8989',
+        target: 'http://95.217.213.18:8981',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path,
       },
       '/health': {
-        target: 'http://95.217.213.18:8989',
+        target: 'http://95.217.213.18:8981',
         changeOrigin: true,
         secure: false,
         rewrite: (path) => path,
