@@ -32,7 +32,13 @@ func NewPackageManager() (*PackageManager, error) {
 
 func (pm *PackageManager) InstallPHP(version string) error {
 	// Validate minimum PHP version (7.4)
-	if version < "7.4" {
+	parts := strings.Split(version, ".")
+	if len(parts) < 2 {
+		return fmt.Errorf("invalid PHP version format: %s", version)
+	}
+	
+	major, minor := parts[0], parts[1]
+	if major < "7" || (major == "7" && minor < "4") {
 		return fmt.Errorf("PHP version %s is not supported. Minimum version is 7.4", version)
 	}
 
