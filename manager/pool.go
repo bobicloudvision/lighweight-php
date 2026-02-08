@@ -29,6 +29,11 @@ type PoolManager struct {
 	providerFactory *provider.ProviderFactory
 }
 
+// GetDatabase returns the database instance (for API access)
+func (pm *PoolManager) GetDatabase() *db.Database {
+	return pm.db
+}
+
 func NewPoolManager() (*PoolManager, error) {
 	database, err := db.NewDatabase("")
 	if err != nil {

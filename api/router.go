@@ -206,15 +206,23 @@ func (r *Router) installPHP(w http.ResponseWriter, req *http.Request) {
 }
 
 func (r *Router) listPHPVersions(w http.ResponseWriter, req *http.Request) {
-	versions, err := r.packageManager.ListInstalledPHP()
+	// Get PHP versions from database (includes provider information)
+	dbVersions, err := r.poolManager.GetDatabase().ListPHPVersions()
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}
-	// Ensure versions is never nil
-	if versions == nil {
-		versions = []string{}
+
+	// Convert to response format with provider information
+	versions := make([]map[string]string, 0, len(dbVersions))
+	for _, v := range dbVersions {
+		versions = append(versions, map[string]string{
+			"version":  v.Version,
+			"provider": v.PackageManager,
+			"status":   v.Status,
+		})
 	}
+
 	jsonResponse(w, http.StatusOK, map[string]interface{}{
 		"versions": versions,
 	})

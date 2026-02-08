@@ -78,14 +78,35 @@ curl -X POST http://localhost:8080/api/v1/php/install/8.2?provider=docker
 
 #### GET /api/v1/php/versions
 
-List all installed PHP versions.
+List all installed PHP versions with their provider information.
 
 **Response:**
 ```json
 {
-  "versions": ["8.2", "8.1", "8.3"]
+  "versions": [
+    {
+      "version": "8.2",
+      "provider": "remi",
+      "status": "active"
+    },
+    {
+      "version": "8.1",
+      "provider": "remi",
+      "status": "active"
+    },
+    {
+      "version": "8.3",
+      "provider": "lsphp",
+      "status": "active"
+    }
+  ]
 }
 ```
+
+**Response Fields:**
+- `version` (string) - PHP version number
+- `provider` (string) - Provider type: `remi`, `lsphp`, `alt-php`, or `docker`
+- `status` (string) - Installation status (usually `active`)
 
 **Example:**
 ```bash
