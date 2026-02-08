@@ -128,6 +128,26 @@ func (pm *PoolManager) CreatePool(username, phpVersion, providerType string) err
 		return fmt.Errorf("failed to create socket directory: %w", err)
 	}
 
+	// Ensure PHP version exists in database (required for foreign key constraint)
+	phpVersionRecord, err := pm.db.GetPHPVersion(phpVersion)
+	if err != nil {
+		return fmt.Errorf("failed to check PHP version: %w", err)
+	}
+	if phpVersionRecord == nil {
+		// PHP version not registered, create it
+		detector := system.NewOSDetector()
+		osFamily, _ := detector.Detect()
+		var osFamilyStr string
+		if osFamily == system.OSRHEL {
+			osFamilyStr = "rhel"
+		} else {
+			osFamilyStr = "debian"
+		}
+		if err := pm.db.CreatePHPVersion(phpVersion, providerType, osFamilyStr); err != nil {
+			return fmt.Errorf("failed to register PHP version: %w", err)
+		}
+	}
+
 	// Save to database
 	if err := pm.db.CreatePool(username, phpVersion, providerType, socketPath, configPath); err != nil {
 		// Rollback: remove config file if database save fails
