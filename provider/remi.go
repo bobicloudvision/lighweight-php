@@ -45,7 +45,8 @@ func (p *RemiProvider) GetSocketPath(username, version string) string {
 
 func (p *RemiProvider) GetConfigPath(username, version string) string {
 	if p.osFamily == system.OSRHEL {
-		return filepath.Join("/etc/php-fpm.d", fmt.Sprintf("%s.conf", username))
+		versionNum := strings.ReplaceAll(version, ".", "")
+		return filepath.Join("/etc/opt/remi", fmt.Sprintf("php%s", versionNum), "php-fpm.d", fmt.Sprintf("%s.conf", username))
 	}
 	return filepath.Join("/etc/php", version, "fpm/pool.d", fmt.Sprintf("%s.conf", username))
 }

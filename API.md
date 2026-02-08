@@ -553,7 +553,7 @@ curl -X DELETE http://localhost:8080/api/v1/pools/john
 - PHP-FPM services are automatically reloaded after pool creation/deletion
 - The user must exist in the system before creating a pool
 - Pool configurations are stored in:
-  - RHEL: `/etc/php-fpm.d/{username}.conf`
+  - RHEL (Remi): `/etc/opt/remi/php{version}/php-fpm.d/{username}.conf` (e.g., `/etc/opt/remi/php74/php-fpm.d/{username}.conf`)
   - Debian: `/etc/php/{version}/fpm/pool.d/{username}.conf`
 
 ## Database
