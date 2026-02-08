@@ -46,6 +46,7 @@ func (r *Router) setupRoutes() {
 	// PHP installation endpoints
 	r.HandleFunc("/api/v1/php/install/{version}", r.installPHP).Methods("POST")
 	r.HandleFunc("/api/v1/php/versions", r.listPHPVersions).Methods("GET")
+	r.HandleFunc("/api/v1/php/available", r.listAvailablePHP).Methods("GET")
 
 	// Health check
 	r.HandleFunc("/health", r.healthCheck).Methods("GET")
@@ -147,6 +148,17 @@ func (r *Router) installPHP(w http.ResponseWriter, req *http.Request) {
 
 func (r *Router) listPHPVersions(w http.ResponseWriter, req *http.Request) {
 	versions, err := r.packageManager.ListInstalledPHP()
+	if err != nil {
+		jsonError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	jsonResponse(w, http.StatusOK, map[string]interface{}{
+		"versions": versions,
+	})
+}
+
+func (r *Router) listAvailablePHP(w http.ResponseWriter, req *http.Request) {
+	versions, err := r.packageManager.ListAvailablePHP()
 	if err != nil {
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return

@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8080'
+export const API_BASE_URL = 'http://95.217.213.18:8989'
 
 export interface Pool {
   User: string
@@ -24,19 +24,61 @@ class ApiService {
           'Content-Type': 'application/json',
           ...options.headers,
         },
+        mode: 'cors',
         ...options,
       })
 
-      const data = await response.json()
-
+      // Check if response is ok before trying to parse JSON
       if (!response.ok) {
+        let errorMessage = `HTTP ${response.status}: ${response.statusText}`
+        try {
+          const errorData = await response.json()
+          if (errorData.error) {
+            errorMessage = errorData.error
+          }
+        } catch {
+          // If response is not JSON, use the status text
+        }
+        return { error: errorMessage }
+      }
+
+      // Try to parse JSON, but handle cases where response might not be JSON
+      let data: T
+      try {
+        const contentType = response.headers.get('content-type')
+        if (contentType && contentType.includes('application/json')) {
+          data = await response.json()
+        } else {
+          const text = await response.text()
+          // Try to parse as JSON anyway
+          try {
+            data = JSON.parse(text) as T
+          } catch {
+            return { error: `Invalid response format: ${text.substring(0, 100)}` }
+          }
+        }
+      } catch (parseError) {
         return {
-          error: data.error || `HTTP ${response.status}: ${response.statusText}`,
+          error: 'Failed to parse response as JSON',
         }
       }
 
       return { data }
     } catch (error) {
+      // Handle CORS and network errors
+      if (error instanceof TypeError) {
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+          return {
+            error: `CORS or network error: Unable to connect to ${API_BASE_URL}. Please ensure the server is running and CORS is properly configured.`,
+          }
+        }
+        if (error.message.includes('CORS')) {
+          return {
+            error: `CORS error: The server at ${API_BASE_URL} is not allowing requests from this origin. Please configure CORS headers on the server.`,
+          }
+        }
+      }
+      
       return {
         error: error instanceof Error ? error.message : 'Unknown error occurred',
       }
@@ -56,6 +98,10 @@ class ApiService {
 
   async getPhpVersions(): Promise<ApiResponse<{ versions: string[] }>> {
     return this.request<{ versions: string[] }>('/api/v1/php/versions')
+  }
+
+  async getAvailablePhpVersions(): Promise<ApiResponse<{ versions: string[] }>> {
+    return this.request<{ versions: string[] }>('/api/v1/php/available')
   }
 
   async getPools(): Promise<ApiResponse<Pool[]>> {

@@ -118,7 +118,7 @@ export default function Dashboard() {
           </div>
           <div className="ml-3">
             <p className="text-sm text-blue-700">
-              <strong>Base URL:</strong> <code className="bg-blue-100 px-2 py-1 rounded text-sm">http://localhost:8080</code>
+              <strong>Base URL:</strong> <code className="bg-blue-100 px-2 py-1 rounded text-sm">http://localhost:8989</code>
             </p>
           </div>
         </div>

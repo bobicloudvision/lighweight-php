@@ -2,8 +2,10 @@ import { useState } from 'react'
 import Dashboard from './components/Dashboard'
 import PhpManagement from './components/PhpManagement'
 import PoolManagement from './components/PoolManagement'
+import Marketplace from './components/Marketplace'
+import CorsWarning from './components/CorsWarning'
 
-type Tab = 'dashboard' | 'php' | 'pools'
+type Tab = 'dashboard' | 'marketplace' | 'php' | 'pools'
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard')
@@ -12,6 +14,11 @@ function App() {
     { id: 'dashboard' as Tab, label: 'Dashboard', icon: (
       <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+      </svg>
+    )},
+    { id: 'marketplace' as Tab, label: 'Marketplace', icon: (
+      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
       </svg>
     )},
     { id: 'php' as Tab, label: 'PHP Management', icon: (
@@ -37,7 +44,7 @@ function App() {
               <span className="ml-3 px-2 py-1 text-xs font-semibold bg-blue-100 text-blue-800 rounded">REST API</span>
             </div>
             <div className="text-sm text-gray-600">
-              <code className="bg-gray-100 px-2 py-1 rounded">http://localhost:8080</code>
+              <code className="bg-gray-100 px-2 py-1 rounded">http://localhost:8989</code>
             </div>
           </div>
         </div>
@@ -67,7 +74,9 @@ function App() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <CorsWarning />
         {activeTab === 'dashboard' && <Dashboard />}
+        {activeTab === 'marketplace' && <Marketplace />}
         {activeTab === 'php' && <PhpManagement />}
         {activeTab === 'pools' && <PoolManagement />}
       </main>

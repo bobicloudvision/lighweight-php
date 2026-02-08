@@ -93,6 +93,38 @@ curl http://localhost:8080/api/v1/php/versions
 
 ---
 
+#### GET /api/v1/php/available
+
+List all available PHP versions that can be installed from the repository (Remi for RHEL, ondrej PPA for Debian).
+
+**Response:**
+```json
+{
+  "versions": ["8.3", "8.2", "8.1", "8.0", "7.4", "7.3", "7.2"]
+}
+```
+
+**Example:**
+```bash
+curl http://localhost:8080/api/v1/php/available
+```
+
+**Notes:**
+- This endpoint queries the package repositories to find available PHP versions
+- For RHEL systems, it checks Remi repository for available PHP versions
+- For Debian/Ubuntu systems, it checks ondrej PPA for available PHP versions
+- If repository queries fail, it returns a list of commonly available versions
+- The list may vary depending on your system's repository configuration
+
+**Error Response (500):**
+```json
+{
+  "error": "failed to list available PHP versions: ..."
+}
+```
+
+---
+
 ### Pool Management
 
 #### GET /api/v1/pools
@@ -296,34 +328,39 @@ All error responses follow this format:
 
 ### Complete Workflow
 
-1. **Install PHP 8.2:**
+1. **Check available PHP versions:**
+```bash
+curl http://localhost:8080/api/v1/php/available
+```
+
+2. **Install PHP 8.2:**
 ```bash
 curl -X POST http://localhost:8080/api/v1/php/install/8.2
 ```
 
-2. **List installed PHP versions:**
+3. **List installed PHP versions:**
 ```bash
 curl http://localhost:8080/api/v1/php/versions
 ```
 
-3. **Create a pool for user "john":**
+4. **Create a pool for user "john":**
 ```bash
 curl -X POST http://localhost:8080/api/v1/pools \
   -H "Content-Type: application/json" \
   -d '{"username": "john", "php_version": "8.2"}'
 ```
 
-4. **Get pool information:**
+5. **Get pool information:**
 ```bash
 curl http://localhost:8080/api/v1/pools/john
 ```
 
-5. **List all pools:**
+6. **List all pools:**
 ```bash
 curl http://localhost:8080/api/v1/pools
 ```
 
-6. **Delete pool:**
+7. **Delete pool:**
 ```bash
 curl -X DELETE http://localhost:8080/api/v1/pools/john
 ```
