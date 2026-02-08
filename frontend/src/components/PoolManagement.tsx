@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { apiService } from '../services/api'
-import type { Pool, Provider } from '../services/api'
+import type { Pool, Provider, PoolConfig } from '../services/api'
 
 export default function PoolManagement() {
   const [pools, setPools] = useState<Pool[]>([])
@@ -12,6 +12,9 @@ export default function PoolManagement() {
   const [showCreateForm, setShowCreateForm] = useState(false)
   const [selectedPool, setSelectedPool] = useState<Pool | null>(null)
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [showConfigEditor, setShowConfigEditor] = useState(false)
+  const [poolConfig, setPoolConfig] = useState<PoolConfig>({})
+  const [updatingConfig, setUpdatingConfig] = useState(false)
   
   // Create form state
   const [username, setUsername] = useState('')
@@ -156,9 +159,45 @@ export default function PoolManagement() {
     const result = await apiService.getPool(username)
     if (result.data) {
       setSelectedPool(result.data)
+      setShowConfigEditor(false)
     } else {
       setError(result.error || 'Failed to load pool details')
     }
+  }
+
+  const handleEditPool = async (username: string) => {
+    const result = await apiService.getPool(username)
+    if (result.data) {
+      setSelectedPool(result.data)
+      setShowConfigEditor(true)
+      setError(null)
+      setSuccess(null)
+    } else {
+      setError(result.error || 'Failed to load pool details')
+    }
+  }
+
+  const handleUpdateConfig = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedPool) return
+
+    setUpdatingConfig(true)
+    setError(null)
+    setSuccess(null)
+
+    const result = await apiService.updatePoolConfig(selectedPool.User, poolConfig)
+    
+    if (result.data) {
+      setSuccess(`Pool configuration updated successfully for ${selectedPool.User}!`)
+      setShowConfigEditor(false)
+      setPoolConfig({})
+      await loadPools()
+      await handleViewPool(selectedPool.User)
+    } else {
+      setError(result.error || 'Failed to update pool configuration')
+    }
+
+    setUpdatingConfig(false)
   }
 
   return (
@@ -472,14 +511,297 @@ export default function PoolManagement() {
                 </p>
               </div>
             </div>
-            <div className="p-6 border-t border-gray-200 flex justify-end">
-              <button
-                onClick={() => setSelectedPool(null)}
-                className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
-              >
-                Close
-              </button>
-            </div>
+            {!showConfigEditor ? (
+              <div className="p-6 border-t border-gray-200 flex justify-between">
+                <button
+                  onClick={() => {
+                    setShowConfigEditor(true)
+                    setError(null)
+                    setSuccess(null)
+                  }}
+                  className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                  </svg>
+                  Edit Configuration
+                </button>
+                <button
+                  onClick={() => setSelectedPool(null)}
+                  className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            ) : (
+              <div className="p-6 border-t border-gray-200">
+                <h4 className="text-lg font-semibold text-gray-900 mb-4">Edit Pool Configuration</h4>
+                
+                {error && (
+                  <div className="mb-4 bg-red-50 border-l-4 border-red-400 p-4 rounded">
+                    <p className="text-sm text-red-700">{error}</p>
+                  </div>
+                )}
+
+                {success && (
+                  <div className="mb-4 bg-green-50 border-l-4 border-green-400 p-4 rounded">
+                    <p className="text-sm text-green-700">{success}</p>
+                  </div>
+                )}
+
+                <form onSubmit={handleUpdateConfig} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label htmlFor="max_children" className="block text-sm font-medium text-gray-700 mb-1">
+                        Max Children
+                      </label>
+                      <input
+                        type="number"
+                        id="max_children"
+                        value={poolConfig.max_children || ''}
+                        onChange={(e) => setPoolConfig({ ...poolConfig, max_children: parseInt(e.target.value) || undefined })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="50"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="start_servers" className="block text-sm font-medium text-gray-700 mb-1">
+                        Start Servers
+                      </label>
+                      <input
+                        type="number"
+                        id="start_servers"
+                        value={poolConfig.start_servers || ''}
+                        onChange={(e) => setPoolConfig({ ...poolConfig, start_servers: parseInt(e.target.value) || undefined })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="5"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="min_spare_servers" className="block text-sm font-medium text-gray-700 mb-1">
+                        Min Spare Servers
+                      </label>
+                      <input
+                        type="number"
+                        id="min_spare_servers"
+                        value={poolConfig.min_spare_servers || ''}
+                        onChange={(e) => setPoolConfig({ ...poolConfig, min_spare_servers: parseInt(e.target.value) || undefined })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="5"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="max_spare_servers" className="block text-sm font-medium text-gray-700 mb-1">
+                        Max Spare Servers
+                      </label>
+                      <input
+                        type="number"
+                        id="max_spare_servers"
+                        value={poolConfig.max_spare_servers || ''}
+                        onChange={(e) => setPoolConfig({ ...poolConfig, max_spare_servers: parseInt(e.target.value) || undefined })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="35"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="max_requests" className="block text-sm font-medium text-gray-700 mb-1">
+                        Max Requests
+                      </label>
+                      <input
+                        type="number"
+                        id="max_requests"
+                        value={poolConfig.max_requests || ''}
+                        onChange={(e) => setPoolConfig({ ...poolConfig, max_requests: parseInt(e.target.value) || undefined })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="500"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="process_manager" className="block text-sm font-medium text-gray-700 mb-1">
+                        Process Manager
+                      </label>
+                      <select
+                        id="process_manager"
+                        value={poolConfig.process_manager || ''}
+                        onChange={(e) => setPoolConfig({ ...poolConfig, process_manager: e.target.value || undefined })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                      >
+                        <option value="">Select...</option>
+                        <option value="dynamic">Dynamic</option>
+                        <option value="static">Static</option>
+                        <option value="ondemand">Ondemand</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="memory_limit" className="block text-sm font-medium text-gray-700 mb-1">
+                        Memory Limit
+                      </label>
+                      <input
+                        type="text"
+                        id="memory_limit"
+                        value={poolConfig.memory_limit || ''}
+                        onChange={(e) => setPoolConfig({ ...poolConfig, memory_limit: e.target.value || undefined })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="128M"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="max_execution_time" className="block text-sm font-medium text-gray-700 mb-1">
+                        Max Execution Time
+                      </label>
+                      <input
+                        type="text"
+                        id="max_execution_time"
+                        value={poolConfig.max_execution_time || ''}
+                        onChange={(e) => setPoolConfig({ ...poolConfig, max_execution_time: e.target.value || undefined })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="300"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="upload_max_filesize" className="block text-sm font-medium text-gray-700 mb-1">
+                        Upload Max Filesize
+                      </label>
+                      <input
+                        type="text"
+                        id="upload_max_filesize"
+                        value={poolConfig.upload_max_filesize || ''}
+                        onChange={(e) => setPoolConfig({ ...poolConfig, upload_max_filesize: e.target.value || undefined })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="64M"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="post_max_size" className="block text-sm font-medium text-gray-700 mb-1">
+                        Post Max Size
+                      </label>
+                      <input
+                        type="text"
+                        id="post_max_size"
+                        value={poolConfig.post_max_size || ''}
+                        onChange={(e) => setPoolConfig({ ...poolConfig, post_max_size: e.target.value || undefined })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="64M"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="display_errors" className="block text-sm font-medium text-gray-700 mb-1">
+                        Display Errors
+                      </label>
+                      <select
+                        id="display_errors"
+                        value={typeof poolConfig.display_errors === 'boolean' ? (poolConfig.display_errors ? 'on' : 'off') : (poolConfig.display_errors || '')}
+                        onChange={(e) => setPoolConfig({ ...poolConfig, display_errors: e.target.value === 'on' ? true : e.target.value === 'off' ? false : e.target.value || undefined })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                      >
+                        <option value="">Select...</option>
+                        <option value="on">On</option>
+                        <option value="off">Off</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="log_errors" className="block text-sm font-medium text-gray-700 mb-1">
+                        Log Errors
+                      </label>
+                      <select
+                        id="log_errors"
+                        value={typeof poolConfig.log_errors === 'boolean' ? (poolConfig.log_errors ? 'on' : 'off') : (poolConfig.log_errors || '')}
+                        onChange={(e) => setPoolConfig({ ...poolConfig, log_errors: e.target.value === 'on' ? true : e.target.value === 'off' ? false : e.target.value || undefined })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                      >
+                        <option value="">Select...</option>
+                        <option value="on">On</option>
+                        <option value="off">Off</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="date_timezone" className="block text-sm font-medium text-gray-700 mb-1">
+                        Date Timezone
+                      </label>
+                      <input
+                        type="text"
+                        id="date_timezone"
+                        value={poolConfig.date_timezone || ''}
+                        onChange={(e) => setPoolConfig({ ...poolConfig, date_timezone: e.target.value || undefined })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="UTC"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="sendmail_path" className="block text-sm font-medium text-gray-700 mb-1">
+                        Sendmail Path
+                      </label>
+                      <input
+                        type="text"
+                        id="sendmail_path"
+                        value={poolConfig.sendmail_path || ''}
+                        onChange={(e) => setPoolConfig({ ...poolConfig, sendmail_path: e.target.value || undefined })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="/usr/sbin/sendmail"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="process_idle_timeout" className="block text-sm font-medium text-gray-700 mb-1">
+                        Process Idle Timeout
+                      </label>
+                      <input
+                        type="text"
+                        id="process_idle_timeout"
+                        value={poolConfig.process_idle_timeout || ''}
+                        onChange={(e) => setPoolConfig({ ...poolConfig, process_idle_timeout: e.target.value || undefined })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="10s"
+                      />
+                    </div>
+                    <div>
+                      <label htmlFor="listen_mode" className="block text-sm font-medium text-gray-700 mb-1">
+                        Listen Mode
+                      </label>
+                      <input
+                        type="text"
+                        id="listen_mode"
+                        value={poolConfig.listen_mode || ''}
+                        onChange={(e) => setPoolConfig({ ...poolConfig, listen_mode: e.target.value || undefined })}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        placeholder="0660"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-3 pt-4">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowConfigEditor(false)
+                        setPoolConfig({})
+                        setError(null)
+                        setSuccess(null)
+                      }}
+                      className="px-6 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+                      disabled={updatingConfig}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={updatingConfig}
+                      className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                    >
+                      {updatingConfig ? (
+                        <>
+                          <svg className="animate-spin h-5 w-5" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                          </svg>
+                          Updating...
+                        </>
+                      ) : (
+                        'Update Configuration'
+                      )}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
           </div>
         </div>
       )}

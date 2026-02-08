@@ -19,6 +19,25 @@ export interface Provider {
   status: string
 }
 
+export interface PoolConfig {
+  max_children?: number
+  start_servers?: number
+  min_spare_servers?: number
+  max_spare_servers?: number
+  max_requests?: number
+  process_manager?: string
+  memory_limit?: string
+  max_execution_time?: string | number
+  upload_max_filesize?: string
+  post_max_size?: string
+  display_errors?: string | boolean
+  log_errors?: string | boolean
+  date_timezone?: string
+  sendmail_path?: string
+  process_idle_timeout?: string | number
+  listen_mode?: string
+}
+
 export interface ApiResponse<T> {
   data?: T
   error?: string
@@ -117,6 +136,16 @@ class ApiService {
     return this.request<{ message: string; username: string }>(
       `/api/v1/pools/${username}`,
       { method: 'DELETE' }
+    )
+  }
+
+  async updatePoolConfig(username: string, config: PoolConfig): Promise<ApiResponse<{ message: string; username: string; settings: Partial<PoolConfig> }>> {
+    return this.request<{ message: string; username: string; settings: Partial<PoolConfig> }>(
+      `/api/v1/pools/${username}/config`,
+      {
+        method: 'PUT',
+        body: JSON.stringify(config),
+      }
     )
   }
 }
