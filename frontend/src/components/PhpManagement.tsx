@@ -17,10 +17,11 @@ export default function PhpManagement() {
     setLoading(true)
     setError(null)
     const result = await apiService.getPhpVersions()
-    if (result.data) {
-      setVersions(result.data.versions)
+    if (result.data && result.data.versions) {
+      setVersions(Array.isArray(result.data.versions) ? result.data.versions : [])
     } else {
       setError(result.error || 'Failed to load PHP versions')
+      setVersions([])
     }
     setLoading(false)
   }
