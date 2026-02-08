@@ -6,6 +6,7 @@ const API_BASE_URL = import.meta.env.PROD
 export interface Pool {
   User: string
   PHPVersion: string
+  Provider?: string
   Status: string
   ConfigPath: string
   SocketPath: string
@@ -102,12 +103,12 @@ class ApiService {
     return this.request<Pool>(`/api/v1/pools/${username}`)
   }
 
-  async createPool(username: string, phpVersion: string = '8.2'): Promise<ApiResponse<{ message: string; username: string }>> {
+  async createPool(username: string, phpVersion: string = '8.2', provider: string = 'remi'): Promise<ApiResponse<{ message: string; username: string }>> {
     return this.request<{ message: string; username: string }>(
       '/api/v1/pools',
       {
         method: 'POST',
-        body: JSON.stringify({ username, php_version: phpVersion }),
+        body: JSON.stringify({ username, php_version: phpVersion, provider }),
       }
     )
   }

@@ -21,17 +21,22 @@ var poolCreateCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		username := args[0]
 		phpVersion, _ := cmd.Flags().GetString("php-version")
+		provider, _ := cmd.Flags().GetString("provider")
+		
+		if provider == "" {
+			provider = "remi"
+		}
 		
 		pm, err := manager.NewPoolManager()
 		if err != nil {
 			fmt.Printf("Error initializing pool manager: %v\n", err)
 			return
 		}
-		if err := pm.CreatePool(username, phpVersion); err != nil {
+		if err := pm.CreatePool(username, phpVersion, provider); err != nil {
 			fmt.Printf("Error creating pool: %v\n", err)
 			return
 		}
-		fmt.Printf("Pool created for user: %s\n", username)
+		fmt.Printf("Pool created for user: %s with PHP %s (provider: %s)\n", username, phpVersion, provider)
 	},
 }
 
@@ -69,7 +74,7 @@ var poolListCmd = &cobra.Command{
 			return
 		}
 		for _, pool := range pools {
-			fmt.Printf("User: %s, PHP Version: %s, Status: %s\n", pool.User, pool.PHPVersion, pool.Status)
+			fmt.Printf("User: %s, PHP Version: %s, Provider: %s, Status: %s\n", pool.User, pool.PHPVersion, pool.Provider, pool.Status)
 		}
 	},
 }
@@ -79,4 +84,5 @@ func init() {
 	poolCmd.AddCommand(poolDeleteCmd)
 	poolCmd.AddCommand(poolListCmd)
 	poolCreateCmd.Flags().String("php-version", "8.2", "PHP version to use")
+	poolCreateCmd.Flags().String("provider", "remi", "PHP provider (remi, lsphp, alt-php, docker)")
 }

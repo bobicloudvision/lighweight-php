@@ -8,21 +8,24 @@ import (
 	"path/filepath"
 
 	"lightweight-php/db"
+	"lightweight-php/provider"
 	"lightweight-php/system"
 )
 
 type Pool struct {
 	User       string
 	PHPVersion string
+	Provider   string
 	Status     string
 	ConfigPath string
 	SocketPath string
 }
 
 type PoolManager struct {
-	osFamily system.OSFamily
-	fpmDir   string
-	db       *db.Database
+	osFamily       system.OSFamily
+	fpmDir         string
+	db             *db.Database
+	providerFactory *provider.ProviderFactory
 }
 
 func NewPoolManager() (*PoolManager, error) {
@@ -41,38 +44,62 @@ func NewPoolManager() (*PoolManager, error) {
 		fpmDir = "/etc/php/*/fpm/pool.d"
 	}
 
+	providerFactory, err := provider.NewProviderFactory()
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize provider factory: %w", err)
+	}
+
 	return &PoolManager{
-		osFamily: osFamily,
-		fpmDir:   fpmDir,
-		db:       database,
+		osFamily:        osFamily,
+		fpmDir:          fpmDir,
+		db:              database,
+		providerFactory: providerFactory,
 	}, nil
 }
 
-func (pm *PoolManager) CreatePool(username, phpVersion string) error {
+func (pm *PoolManager) CreatePool(username, phpVersion, providerType string) error {
 	// Verify user exists
 	_, err := user.Lookup(username)
 	if err != nil {
 		return fmt.Errorf("user %s does not exist: %w", username, err)
 	}
 
-	// Determine PHP-FPM config directory based on version
-	var poolDir string
-	if pm.osFamily == system.OSRHEL {
-		poolDir = fmt.Sprintf("/etc/php-fpm.d")
-	} else {
-		poolDir = fmt.Sprintf("/etc/php/%s/fpm/pool.d", phpVersion)
+	// Validate provider type
+	var providerTypeEnum provider.ProviderType
+	switch providerType {
+	case "remi":
+		providerTypeEnum = provider.ProviderRemi
+	case "lsphp":
+		providerTypeEnum = provider.ProviderLiteSpeed
+	case "alt-php":
+		providerTypeEnum = provider.ProviderAltPHP
+	case "docker":
+		providerTypeEnum = provider.ProviderDocker
+	default:
+		return fmt.Errorf("invalid provider type: %s. Supported: remi, lsphp, alt-php, docker", providerType)
 	}
+
+	// Get provider instance
+	phpProvider, err := pm.providerFactory.CreateProvider(providerTypeEnum)
+	if err != nil {
+		return fmt.Errorf("failed to create provider: %w", err)
+	}
+
+	// Get paths from provider
+	socketPath := phpProvider.GetSocketPath(username, phpVersion)
+	configPath := phpProvider.GetConfigPath(username, phpVersion)
+
+	// Get pool directory from config path
+	poolDir := filepath.Dir(configPath)
 
 	// Create pool directory if it doesn't exist
 	if err := os.MkdirAll(poolDir, 0755); err != nil {
 		return fmt.Errorf("failed to create pool directory: %w", err)
 	}
 
-	poolFile := filepath.Join(poolDir, fmt.Sprintf("%s.conf", username))
-
 	// Check if pool already exists
-	if _, err := os.Stat(poolFile); err == nil {
-		return fmt.Errorf("pool for user %s already exists", username)
+	if _, err := os.Stat(configPath); err == nil {
+		return fmt.Errorf("pool for user %s with PHP %s and provider %s already exists", username, phpVersion, providerType)
 	}
 
 	// Get user info
@@ -80,19 +107,11 @@ func (pm *PoolManager) CreatePool(username, phpVersion string) error {
 	uid := u.Uid
 	gid := u.Gid
 
-	// Determine socket path
-	var socketPath string
-	if pm.osFamily == system.OSRHEL {
-		socketPath = fmt.Sprintf("/var/run/php-fpm/%s.sock", username)
-	} else {
-		socketPath = fmt.Sprintf("/var/run/php/php%s-%s.sock", phpVersion, username)
-	}
-
 	// Create pool configuration
 	config := pm.generatePoolConfig(username, uid, gid, socketPath, phpVersion)
 
 	// Write pool configuration
-	if err := os.WriteFile(poolFile, []byte(config), 0644); err != nil {
+	if err := os.WriteFile(configPath, []byte(config), 0644); err != nil {
 		return fmt.Errorf("failed to write pool config: %w", err)
 	}
 
@@ -103,14 +122,15 @@ func (pm *PoolManager) CreatePool(username, phpVersion string) error {
 	}
 
 	// Save to database
-	if err := pm.db.CreatePool(username, phpVersion, socketPath, poolFile); err != nil {
+	if err := pm.db.CreatePool(username, phpVersion, providerType, socketPath, configPath); err != nil {
 		// Rollback: remove config file if database save fails
-		os.Remove(poolFile)
+		os.Remove(configPath)
 		return fmt.Errorf("failed to save pool to database: %w", err)
 	}
 
-	// Reload PHP-FPM
-	if err := pm.reloadFPM(phpVersion); err != nil {
+	// Reload PHP-FPM using provider's service name
+	serviceName := phpProvider.GetServiceName(phpVersion)
+	if err := pm.reloadFPMService(serviceName); err != nil {
 		return fmt.Errorf("failed to reload PHP-FPM: %w", err)
 	}
 
@@ -134,21 +154,31 @@ func (pm *PoolManager) DeletePool(username string) error {
 		}
 	}
 
+	// Get provider to reload service
+	var providerTypeEnum provider.ProviderType
+	switch dbPool.Provider {
+	case "remi":
+		providerTypeEnum = provider.ProviderRemi
+	case "lsphp":
+		providerTypeEnum = provider.ProviderLiteSpeed
+	case "alt-php":
+		providerTypeEnum = provider.ProviderAltPHP
+	case "docker":
+		providerTypeEnum = provider.ProviderDocker
+	default:
+		// If provider is unknown, skip reload
+		providerTypeEnum = provider.ProviderRemi
+	}
+
+	phpProvider, err := pm.providerFactory.CreateProvider(providerTypeEnum)
+	if err == nil {
+		serviceName := phpProvider.GetServiceName(dbPool.PHPVersion)
+		pm.reloadFPMService(serviceName)
+	}
+
 	// Remove from database
 	if err := pm.db.DeletePool(username); err != nil {
 		return fmt.Errorf("failed to delete pool from database: %w", err)
-	}
-
-	// Reload PHP-FPM (try all versions)
-	if pm.osFamily == system.OSDebian {
-		entries, _ := os.ReadDir("/etc/php")
-		for _, entry := range entries {
-			if entry.IsDir() {
-				pm.reloadFPM(entry.Name())
-			}
-		}
-	} else {
-		pm.reloadFPM("")
 	}
 
 	return nil
@@ -165,6 +195,7 @@ func (pm *PoolManager) ListPools() ([]Pool, error) {
 		pools = append(pools, Pool{
 			User:       dbPool.Username,
 			PHPVersion: dbPool.PHPVersion,
+			Provider:   dbPool.Provider,
 			Status:     dbPool.Status,
 			ConfigPath: dbPool.ConfigPath,
 			SocketPath: dbPool.SocketPath,
@@ -200,25 +231,12 @@ php_admin_value[memory_limit] = 128M
 	return config
 }
 
-func (pm *PoolManager) reloadFPM(phpVersion string) error {
-	var cmd *exec.Cmd
-	if pm.osFamily == system.OSRHEL {
-		cmd = exec.Command("systemctl", "reload", "php-fpm")
-	} else {
-		serviceName := fmt.Sprintf("php%s-fpm", phpVersion)
-		cmd = exec.Command("systemctl", "reload", serviceName)
-	}
-
+func (pm *PoolManager) reloadFPMService(serviceName string) error {
+	cmd := exec.Command("systemctl", "reload", serviceName)
 	if err := cmd.Run(); err != nil {
 		// Try alternative method
-		if pm.osFamily == system.OSRHEL {
-			cmd = exec.Command("systemctl", "reload-or-restart", "php-fpm")
-		} else {
-			serviceName := fmt.Sprintf("php%s-fpm", phpVersion)
-			cmd = exec.Command("systemctl", "reload-or-restart", serviceName)
-		}
+		cmd = exec.Command("systemctl", "reload-or-restart", serviceName)
 		return cmd.Run()
 	}
-
 	return nil
 }

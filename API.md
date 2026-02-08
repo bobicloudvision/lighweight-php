@@ -145,16 +145,18 @@ List all PHP-FPM pools.
   {
     "User": "john",
     "PHPVersion": "8.2",
+    "Provider": "remi",
     "Status": "active",
     "ConfigPath": "/etc/php-fpm.d/john.conf",
     "SocketPath": "/var/run/php-fpm/john.sock"
   },
   {
     "User": "jane",
-    "PHPVersion": "8.1",
+    "PHPVersion": "8.3",
+    "Provider": "lsphp",
     "Status": "active",
-    "ConfigPath": "/etc/php/8.1/fpm/pool.d/jane.conf",
-    "SocketPath": "/var/run/php/php8.1-jane.sock"
+    "ConfigPath": "/usr/local/lsws/lsphp83/etc/php-fpm.d/jane.conf",
+    "SocketPath": "/var/run/lsphp/jane.sock"
   }
 ]
 ```
@@ -175,19 +177,21 @@ curl http://localhost:8080/api/v1/pools
 
 #### POST /api/v1/pools
 
-Create a new PHP-FPM pool for a user.
+Create a new PHP-FPM pool for a user. **Provider must be specified** to determine which PHP backend to use.
 
 **Request Body:**
 ```json
 {
   "username": "john",
-  "php_version": "8.2"
+  "php_version": "8.2",
+  "provider": "remi"
 }
 ```
 
 **Fields:**
 - `username` (required) - System username to create pool for
 - `php_version` (optional) - PHP version to use (default: `8.2`)
+- `provider` (optional) - PHP provider type: `remi`, `lsphp`, `alt-php`, or `docker` (default: `remi`)
 
 **Response (201):**
 ```json
@@ -197,13 +201,23 @@ Create a new PHP-FPM pool for a user.
 }
 ```
 
-**Example:**
+**Examples:**
 ```bash
+# Create pool with default provider (remi)
 curl -X POST http://localhost:8080/api/v1/pools \
   -H "Content-Type: application/json" \
   -d '{
     "username": "john",
     "php_version": "8.2"
+  }'
+
+# Create pool with LiteSpeed PHP provider
+curl -X POST http://localhost:8080/api/v1/pools \
+  -H "Content-Type: application/json" \
+  -d '{
+    "username": "jane",
+    "php_version": "8.3",
+    "provider": "lsphp"
   }'
 ```
 
@@ -231,6 +245,12 @@ curl -X POST http://localhost:8080/api/v1/pools \
 
 ```json
 {
+  "error": "invalid provider type: invalid. Supported: remi, lsphp, alt-php, docker"
+}
+```
+
+```json
+{
   "error": "failed to save pool to database: ..."
 }
 ```
@@ -249,6 +269,7 @@ Get pool information for a specific user.
 {
   "User": "john",
   "PHPVersion": "8.2",
+  "Provider": "remi",
   "Status": "active",
   "ConfigPath": "/etc/php-fpm.d/john.conf",
   "SocketPath": "/var/run/php-fpm/john.sock"

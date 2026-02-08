@@ -76,6 +76,7 @@ func (r *Router) createPool(w http.ResponseWriter, req *http.Request) {
 	var reqBody struct {
 		Username   string `json:"username"`
 		PHPVersion string `json:"php_version"`
+		Provider   string `json:"provider"`
 	}
 
 	if err := json.NewDecoder(req.Body).Decode(&reqBody); err != nil {
@@ -92,7 +93,11 @@ func (r *Router) createPool(w http.ResponseWriter, req *http.Request) {
 		reqBody.PHPVersion = "8.2"
 	}
 
-	if err := r.poolManager.CreatePool(reqBody.Username, reqBody.PHPVersion); err != nil {
+	if reqBody.Provider == "" {
+		reqBody.Provider = "remi"
+	}
+
+	if err := r.poolManager.CreatePool(reqBody.Username, reqBody.PHPVersion, reqBody.Provider); err != nil {
 		jsonError(w, http.StatusInternalServerError, err.Error())
 		return
 	}

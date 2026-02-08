@@ -57,13 +57,14 @@ func (db *Database) initSchema() error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		username TEXT NOT NULL,
 		php_version TEXT NOT NULL,
+		provider TEXT NOT NULL DEFAULT 'remi',
 		socket_path TEXT NOT NULL,
 		config_path TEXT NOT NULL,
 		status TEXT DEFAULT 'active',
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 		FOREIGN KEY (php_version) REFERENCES php_versions(version),
-		UNIQUE(username, php_version)
+		UNIQUE(username, php_version, provider)
 	);
 
 	CREATE INDEX IF NOT EXISTS idx_pools_username ON pools(username);

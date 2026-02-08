@@ -18,6 +18,7 @@ type Pool struct {
 	ID         int64
 	Username   string
 	PHPVersion string
+	Provider   string
 	SocketPath string
 	ConfigPath string
 	Status     string
@@ -87,15 +88,15 @@ func (db *Database) ListPHPVersions() ([]PHPVersion, error) {
 	return versions, nil
 }
 
-func (db *Database) CreatePool(username, phpVersion, socketPath, configPath string) error {
+func (db *Database) CreatePool(username, phpVersion, provider, socketPath, configPath string) error {
 	_, err := db.Exec(
-		`INSERT INTO pools (username, php_version, socket_path, config_path, status) 
-		 VALUES (?, ?, ?, ?, 'active')
-		 ON CONFLICT(username, php_version) DO UPDATE SET
+		`INSERT INTO pools (username, php_version, provider, socket_path, config_path, status) 
+		 VALUES (?, ?, ?, ?, ?, 'active')
+		 ON CONFLICT(username, php_version, provider) DO UPDATE SET
 		 socket_path = excluded.socket_path,
 		 config_path = excluded.config_path,
 		 updated_at = CURRENT_TIMESTAMP`,
-		username, phpVersion, socketPath, configPath,
+		username, phpVersion, provider, socketPath, configPath,
 	)
 	return err
 }
@@ -104,10 +105,10 @@ func (db *Database) GetPool(username string) (*Pool, error) {
 	var p Pool
 	var createdAt, updatedAt sql.NullTime
 	err := db.QueryRow(
-		`SELECT id, username, php_version, socket_path, config_path, status, created_at, updated_at 
+		`SELECT id, username, php_version, provider, socket_path, config_path, status, created_at, updated_at 
 		 FROM pools WHERE username = ? ORDER BY created_at DESC LIMIT 1`,
 		username,
-	).Scan(&p.ID, &p.Username, &p.PHPVersion, &p.SocketPath, &p.ConfigPath, &p.Status, &createdAt, &updatedAt)
+	).Scan(&p.ID, &p.Username, &p.PHPVersion, &p.Provider, &p.SocketPath, &p.ConfigPath, &p.Status, &createdAt, &updatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -130,10 +131,10 @@ func (db *Database) GetPoolByUsernameAndVersion(username, phpVersion string) (*P
 	var p Pool
 	var createdAt, updatedAt sql.NullTime
 	err := db.QueryRow(
-		`SELECT id, username, php_version, socket_path, config_path, status, created_at, updated_at 
+		`SELECT id, username, php_version, provider, socket_path, config_path, status, created_at, updated_at 
 		 FROM pools WHERE username = ? AND php_version = ?`,
 		username, phpVersion,
-	).Scan(&p.ID, &p.Username, &p.PHPVersion, &p.SocketPath, &p.ConfigPath, &p.Status, &createdAt, &updatedAt)
+	).Scan(&p.ID, &p.Username, &p.PHPVersion, &p.Provider, &p.SocketPath, &p.ConfigPath, &p.Status, &createdAt, &updatedAt)
 
 	if err == sql.ErrNoRows {
 		return nil, nil
@@ -154,7 +155,7 @@ func (db *Database) GetPoolByUsernameAndVersion(username, phpVersion string) (*P
 
 func (db *Database) ListPools() ([]Pool, error) {
 	rows, err := db.Query(
-		`SELECT id, username, php_version, socket_path, config_path, status, created_at, updated_at 
+		`SELECT id, username, php_version, provider, socket_path, config_path, status, created_at, updated_at 
 		 FROM pools ORDER BY username, created_at DESC`,
 	)
 	if err != nil {
@@ -166,7 +167,7 @@ func (db *Database) ListPools() ([]Pool, error) {
 	for rows.Next() {
 		var p Pool
 		var createdAt, updatedAt sql.NullTime
-		if err := rows.Scan(&p.ID, &p.Username, &p.PHPVersion, &p.SocketPath, &p.ConfigPath, &p.Status, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&p.ID, &p.Username, &p.PHPVersion, &p.Provider, &p.SocketPath, &p.ConfigPath, &p.Status, &createdAt, &updatedAt); err != nil {
 			return nil, err
 		}
 		if createdAt.Valid {

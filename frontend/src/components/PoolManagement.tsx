@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react'
 import { apiService } from '../services/api'
-import type { Pool } from '../services/api'
+import type { Pool, Provider } from '../services/api'
 
 export default function PoolManagement() {
   const [pools, setPools] = useState<Pool[]>([])
+  const [providers, setProviders] = useState<Provider[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -14,11 +15,30 @@ export default function PoolManagement() {
   // Create form state
   const [username, setUsername] = useState('')
   const [phpVersion, setPhpVersion] = useState('8.2')
+  const [provider, setProvider] = useState('remi')
   const [creating, setCreating] = useState(false)
 
   useEffect(() => {
+    loadProviders()
     loadPools()
   }, [])
+
+  const loadProviders = async () => {
+    const result = await apiService.getProviders()
+    if (result.data && result.data.providers) {
+      const providersList = Array.isArray(result.data.providers) ? result.data.providers : []
+      setProviders(providersList)
+      // Set default provider to 'remi' if available
+      if (providersList.length > 0) {
+        const remiProvider = providersList.find(p => p.type === 'remi')
+        if (remiProvider) {
+          setProvider('remi')
+        } else {
+          setProvider(providersList[0].type)
+        }
+      }
+    }
+  }
 
   const loadPools = async () => {
     setLoading(true)
@@ -45,12 +65,13 @@ export default function PoolManagement() {
     setError(null)
     setSuccess(null)
 
-    const result = await apiService.createPool(username.trim(), phpVersion)
+    const result = await apiService.createPool(username.trim(), phpVersion, provider)
     
     if (result.data) {
       setSuccess(`Pool for user "${username}" created successfully!`)
       setUsername('')
       setPhpVersion('8.2')
+      setProvider('remi')
       setShowCreateForm(false)
       await loadPools()
     } else {
@@ -158,6 +179,28 @@ export default function PoolManagement() {
               </p>
             </div>
 
+            <div>
+              <label htmlFor="provider-pool" className="block text-sm font-medium text-gray-700 mb-2">
+                Provider
+              </label>
+              <select
+                id="provider-pool"
+                value={provider}
+                onChange={(e) => setProvider(e.target.value)}
+                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                disabled={creating}
+              >
+                {providers.map((p) => (
+                  <option key={p.type} value={p.type}>
+                    {p.name} {p.status === 'stub' && '(Stub)'}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-2 text-sm text-gray-500">
+                PHP provider to use (default: remi)
+              </p>
+            </div>
+
             <div className="flex gap-4">
               <button
                 type="submit"
@@ -242,6 +285,12 @@ export default function PoolManagement() {
                             <span className="font-medium">PHP:</span>
                             <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded">{pool.PHPVersion}</span>
                           </div>
+                          {pool.Provider && (
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium">Provider:</span>
+                              <span className="px-2 py-1 bg-purple-100 text-purple-800 rounded">{pool.Provider}</span>
+                            </div>
+                          )}
                           <div className="flex items-center gap-2">
                             <span className="font-medium">Status:</span>
                             <span className={`px-2 py-1 rounded ${
@@ -322,6 +371,16 @@ export default function PoolManagement() {
                   </span>
                 </p>
               </div>
+              {selectedPool.Provider && (
+                <div>
+                  <label className="text-sm font-medium text-gray-600">Provider</label>
+                  <p className="mt-1">
+                    <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-lg font-semibold">
+                      {selectedPool.Provider}
+                    </span>
+                  </p>
+                </div>
+              )}
               <div>
                 <label className="text-sm font-medium text-gray-600">Status</label>
                 <p className="mt-1">
