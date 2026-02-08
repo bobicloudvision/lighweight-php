@@ -266,176 +266,36 @@ func (pm *PackageManager) ListAvailablePHP() ([]string, error) {
 }
 
 func (pm *PackageManager) listAvailablePHPRHEL() ([]string, error) {
-	// Ensure Remi repo is available
-	if err := pm.ensureRemiRepo(); err != nil {
-		// If repo setup fails, return common versions
-		return []string{"8.3", "8.2", "8.1", "8.0", "7.4"}, nil
+	// Hardcoded list of PHP versions available from Remi repository
+	versions := []string{
+		"8.3",
+		"8.2",
+		"8.1",
+		"8.0",
+		"7.4",
+		"7.3",
+		"7.2",
+		"7.1",
+		"7.0",
+		"5.6",
 	}
-
-	var versions []string
-	var cmd *exec.Cmd
-
-	// Try to list available remi-php repositories
-	if pm.hasCommand("dnf") {
-		cmd = exec.Command("dnf", "repolist", "--enabled", "--disabled")
-	} else {
-		cmd = exec.Command("yum", "repolist", "all")
-	}
-
-	output, err := cmd.Output()
-	if err == nil {
-		lines := strings.Split(string(output), "\n")
-		for _, line := range lines {
-			if strings.Contains(line, "remi-php") {
-				// Extract version from repository name like "remi-php82"
-				parts := strings.Fields(line)
-				for _, part := range parts {
-					if strings.HasPrefix(part, "remi-php") {
-						versionNum := strings.TrimPrefix(part, "remi-php")
-						if len(versionNum) >= 2 {
-							// Convert "82" to "8.2"
-							if len(versionNum) == 2 {
-								version := fmt.Sprintf("%s.%s", versionNum[0:1], versionNum[1:])
-								versions = append(versions, version)
-							} else if len(versionNum) == 3 {
-								// Handle versions like "81" or "74"
-								version := fmt.Sprintf("%s.%s", versionNum[0:1], versionNum[1:])
-								versions = append(versions, version)
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// If we didn't find any, try querying available packages
-	if len(versions) == 0 {
-		// Query for available PHP-FPM packages
-		if pm.hasCommand("dnf") {
-			cmd = exec.Command("dnf", "list", "available", "php*-php-fpm")
-		} else {
-			cmd = exec.Command("yum", "list", "available", "php*-php-fpm")
-		}
-		output, err = cmd.Output()
-		if err == nil {
-			lines := strings.Split(string(output), "\n")
-			for _, line := range lines {
-				if strings.Contains(line, "php") && strings.Contains(line, "fpm") {
-					// Extract version from package name
-					parts := strings.Fields(line)
-					if len(parts) > 0 {
-						pkgName := parts[0]
-						// Extract version from package name like "php82-php-fpm"
-						if strings.HasPrefix(pkgName, "php") {
-							versionNum := strings.TrimPrefix(pkgName, "php")
-							if idx := strings.Index(versionNum, "-php-fpm"); idx > 0 {
-								versionNum = versionNum[:idx]
-								if len(versionNum) >= 2 {
-									version := fmt.Sprintf("%s.%s", versionNum[0:1], versionNum[1:])
-									// Avoid duplicates
-									found := false
-									for _, v := range versions {
-										if v == version {
-											found = true
-											break
-										}
-									}
-									if !found {
-										versions = append(versions, version)
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// If still no versions found, return common Remi versions
-	if len(versions) == 0 {
-		versions = []string{"8.3", "8.2", "8.1", "8.0", "7.4", "7.3", "7.2"}
-	}
-
 	return versions, nil
 }
 
 func (pm *PackageManager) listAvailablePHPDebian() ([]string, error) {
-	var versions []string
-
-	// Try to query available PHP versions from repository
-	cmd := exec.Command("apt-cache", "search", "--names-only", "^php[0-9]\\.[0-9]-fpm$")
-	output, err := cmd.Output()
-	if err == nil {
-		lines := strings.Split(string(output), "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-			if strings.HasPrefix(line, "php") && strings.Contains(line, "-fpm") {
-				// Extract version from package name like "php8.2-fpm"
-				parts := strings.Fields(line)
-				if len(parts) > 0 {
-					pkgName := parts[0]
-					// Remove "php" prefix and "-fpm" suffix
-					if strings.HasPrefix(pkgName, "php") && strings.HasSuffix(pkgName, "-fpm") {
-						version := strings.TrimPrefix(pkgName, "php")
-						version = strings.TrimSuffix(version, "-fpm")
-						// Validate version format (X.Y)
-						if len(version) >= 3 && strings.Contains(version, ".") {
-							// Avoid duplicates
-							found := false
-							for _, v := range versions {
-								if v == version {
-									found = true
-									break
-								}
-							}
-							if !found {
-								versions = append(versions, version)
-							}
-						}
-					}
-				}
-			}
-		}
+	// Hardcoded list of PHP versions available from ondrej PPA
+	versions := []string{
+		"8.3",
+		"8.2",
+		"8.1",
+		"8.0",
+		"7.4",
+		"7.3",
+		"7.2",
+		"7.1",
+		"7.0",
+		"5.6",
 	}
-
-	// If no versions found, try alternative method
-	if len(versions) == 0 {
-		cmd = exec.Command("apt-cache", "pkgnames", "php")
-		output, err = cmd.Output()
-		if err == nil {
-			lines := strings.Split(string(output), "\n")
-			for _, line := range lines {
-				line = strings.TrimSpace(line)
-				if strings.HasPrefix(line, "php") && strings.Contains(line, "-fpm") {
-					// Extract version
-					parts := strings.Split(line, "-")
-					if len(parts) >= 2 && strings.HasPrefix(parts[0], "php") {
-						version := strings.TrimPrefix(parts[0], "php")
-						if len(version) >= 3 && strings.Contains(version, ".") {
-							found := false
-							for _, v := range versions {
-								if v == version {
-									found = true
-									break
-								}
-							}
-							if !found {
-								versions = append(versions, version)
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	// If still no versions found, return common ondrej PPA versions
-	if len(versions) == 0 {
-		versions = []string{"8.3", "8.2", "8.1", "8.0", "7.4", "7.3", "7.2", "7.1", "7.0", "5.6"}
-	}
-
 	return versions, nil
 }
 
