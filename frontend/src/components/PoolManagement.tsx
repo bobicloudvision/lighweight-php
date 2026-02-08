@@ -5,6 +5,7 @@ import type { Pool, Provider } from '../services/api'
 export default function PoolManagement() {
   const [pools, setPools] = useState<Pool[]>([])
   const [providers, setProviders] = useState<Provider[]>([])
+  const [installedVersions, setInstalledVersions] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -14,14 +15,23 @@ export default function PoolManagement() {
   
   // Create form state
   const [username, setUsername] = useState('')
-  const [phpVersion, setPhpVersion] = useState('8.2')
+  const [phpVersion, setPhpVersion] = useState('')
   const [provider, setProvider] = useState('remi')
   const [creating, setCreating] = useState(false)
 
   useEffect(() => {
     loadProviders()
     loadPools()
+    loadInstalledVersions()
   }, [])
+
+  useEffect(() => {
+    // Reload versions when provider changes (but not on initial mount)
+    if (providers.length > 0) {
+      loadInstalledVersions()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [provider])
 
   const loadProviders = async () => {
     const result = await apiService.getProviders()
@@ -53,11 +63,47 @@ export default function PoolManagement() {
     setLoading(false)
   }
 
+  const loadInstalledVersions = async () => {
+    try {
+      // Try to get provider-specific versions first
+      const providerResult = await apiService.getProviderVersions(provider)
+      if (providerResult.data && providerResult.data.versions) {
+        const versions = Array.isArray(providerResult.data.versions) ? providerResult.data.versions : []
+        setInstalledVersions(versions)
+        // Set default version if available and not already set
+        if (versions.length > 0 && !phpVersion) {
+          setPhpVersion(versions[0])
+        }
+        return
+      }
+    } catch {
+      // Fallback to all versions if provider-specific fails
+    }
+
+    // Fallback to all installed versions
+    const result = await apiService.getPhpVersions()
+    if (result.data && result.data.versions) {
+      const versions = Array.isArray(result.data.versions) ? result.data.versions : []
+      setInstalledVersions(versions)
+      // Set default version if available and not already set
+      if (versions.length > 0 && !phpVersion) {
+        setPhpVersion(versions[0])
+      }
+    } else {
+      setInstalledVersions([])
+    }
+  }
+
   const handleCreatePool = async (e: React.FormEvent) => {
     e.preventDefault()
     
     if (!username.trim()) {
       setError('Username is required')
+      return
+    }
+
+    if (!phpVersion) {
+      setError('PHP version is required')
       return
     }
 
@@ -70,10 +116,11 @@ export default function PoolManagement() {
     if (result.data) {
       setSuccess(`Pool for user "${username}" created successfully!`)
       setUsername('')
-      setPhpVersion('8.2')
+      setPhpVersion('')
       setProvider('remi')
       setShowCreateForm(false)
       await loadPools()
+      await loadInstalledVersions()
     } else {
       setError(result.error || 'Failed to create pool')
     }
@@ -126,6 +173,10 @@ export default function PoolManagement() {
             setShowCreateForm(!showCreateForm)
             setError(null)
             setSuccess(null)
+            if (!showCreateForm) {
+              // Reload versions when opening form
+              loadInstalledVersions()
+            }
           }}
           className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
         >
@@ -163,19 +214,31 @@ export default function PoolManagement() {
 
             <div>
               <label htmlFor="php-version-pool" className="block text-sm font-medium text-gray-700 mb-2">
-                PHP Version
+                PHP Version <span className="text-red-600">*</span>
               </label>
-              <input
-                type="text"
-                id="php-version-pool"
-                value={phpVersion}
-                onChange={(e) => setPhpVersion(e.target.value)}
-                placeholder="8.2"
-                className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                disabled={creating}
-              />
+              {installedVersions.length > 0 ? (
+                <select
+                  id="php-version-pool"
+                  value={phpVersion}
+                  onChange={(e) => setPhpVersion(e.target.value)}
+                  required
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  disabled={creating}
+                >
+                  <option value="">Select PHP version</option>
+                  {installedVersions.map((version) => (
+                    <option key={version} value={version}>
+                      PHP {version}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <div className="w-full px-4 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-500">
+                  No PHP versions installed. Please install a PHP version first.
+                </div>
+              )}
               <p className="mt-2 text-sm text-gray-500">
-                PHP version to use (default: 8.2)
+                Select an installed PHP version for this pool
               </p>
             </div>
 
@@ -186,7 +249,10 @@ export default function PoolManagement() {
               <select
                 id="provider-pool"
                 value={provider}
-                onChange={(e) => setProvider(e.target.value)}
+                onChange={(e) => {
+                  setProvider(e.target.value)
+                  setPhpVersion('') // Reset PHP version when provider changes
+                }}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
                 disabled={creating}
               >
