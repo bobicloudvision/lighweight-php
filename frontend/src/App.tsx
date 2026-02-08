@@ -3,7 +3,6 @@ import Dashboard from './components/Dashboard'
 import PhpManagement from './components/PhpManagement'
 import PoolManagement from './components/PoolManagement'
 import Marketplace from './components/Marketplace'
-import CorsWarning from './components/CorsWarning'
 
 type Tab = 'dashboard' | 'marketplace' | 'php' | 'pools'
 
@@ -74,7 +73,6 @@ function App() {
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <CorsWarning />
         {activeTab === 'dashboard' && <Dashboard />}
         {activeTab === 'marketplace' && <Marketplace />}
         {activeTab === 'php' && <PhpManagement />}
